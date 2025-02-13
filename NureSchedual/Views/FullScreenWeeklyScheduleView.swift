@@ -14,6 +14,8 @@ struct FullScreenWeeklyScheduleView: View {
     @State private var isLoadingMoreDays: Bool = false
     @State private var isContentLoaded: Bool = false
 
+    @Namespace private var animationDetail
+    
     // Жёсткие границы диапазона
     private var minDate: Date
     private var maxDate: Date
@@ -208,7 +210,10 @@ struct FullScreenWeeklyScheduleView: View {
                 VStack(spacing: 4) {
                     ScrollView {
                         ForEach(dayTasks) { task in
-                            TaskItemTable(task: task)
+                            NavigationLink(destination: DetailView(task: task, namespace: animationDetail)
+                                .navigationTransition(.zoom(sourceID: "detail", in: animationDetail))) {
+                                    TaskItemTable(task: task)
+                                }
                         }
                     }
                     .frame(maxHeight: .infinity)

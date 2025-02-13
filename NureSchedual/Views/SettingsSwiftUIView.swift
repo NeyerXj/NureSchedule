@@ -122,6 +122,8 @@ struct SettingsSwiftUIView: View {
     @AppStorage("isGestrue") private var isGestrue: Bool = false
     @State private var showClearCahceView: Bool = false
     @StateObject private var networkMonitor = NetworkMonitor()
+    @AppStorage("isScheduleChangesNotificationsEnabled") private var isScheduleChangesNotificationsEnabled: Bool = true
+    @AppStorage("isLessonStartNotificationsEnabled") private var isLessonStartNotificationsEnabled: Bool = true
     private var selectedDate: Binding<Date> {
             Binding(
                 get: { Date(timeIntervalSince1970: progressEndDate) },
@@ -186,15 +188,15 @@ struct SettingsSwiftUIView: View {
                                 
                             
                             // Раздел "Сповіщення"
-                            Toggle(isOn: $areNotificationsEnabled) {
-                                Text("Включити сповіщення")
-                                    .font(.custom("Inter", size: 17).weight(.semibold))
-                                    .foregroundColor(.white)
-                            }
-                            .toggleStyle(CustomToggleStyle())
-                            
-                            Divider()
-                                .background(Color.white.opacity(0.3))
+//                            Toggle(isOn: $areNotificationsEnabled) {
+//                                Text("Включити сповіщення")
+//                                    .font(.custom("Inter", size: 17).weight(.semibold))
+//                                    .foregroundColor(.white)
+//                            }
+//                            .toggleStyle(CustomToggleStyle())
+//                            
+//                            Divider()
+//                                .background(Color.white.opacity(0.3))
                             
                             Toggle(isOn: $isGestrue) {
                                 Text("Зміна днів свайпом")
@@ -203,6 +205,48 @@ struct SettingsSwiftUIView: View {
                             }
                             .toggleStyle(CustomToggleStyle())
                             
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(Color.black.opacity(0.2))
+                        )
+                        .padding()
+                        
+                        // Секция уведомлений
+                        
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Сповіщення (BETA)")
+                                .font(.custom("Inter", size: 20).weight(.bold))
+                                .foregroundColor(.white)
+                                .padding(.top).offset(y:-10)
+                            
+                            Toggle(isOn: $isScheduleChangesNotificationsEnabled) {
+                                VStack(alignment: .leading) {
+                                    Text("Зміни у розкладі")
+                                        .font(.custom("Inter", size: 17).weight(.semibold))
+                                        .foregroundColor(.white)
+                                    Text("Сповіщення про зміни аудиторій та скасування пар")
+                                        .font(.custom("Inter", size: 14))
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                            .toggleStyle(CustomToggleStyle())
+                            
+                            Divider()
+                                .background(Color.white.opacity(0.3))
+                            
+                            Toggle(isOn: $isLessonStartNotificationsEnabled) {
+                                VStack(alignment: .leading) {
+                                    Text("Початок пари")
+                                        .font(.custom("Inter", size: 17).weight(.semibold))
+                                        .foregroundColor(.white)
+                                    Text("Нагадування за 10 хвилин до початку пари")
+                                        .font(.custom("Inter", size: 14))
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                            .toggleStyle(CustomToggleStyle())
                         }
                         .padding()
                         .background(

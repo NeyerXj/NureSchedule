@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import Network
+import UserNotifications
 
 // MARK: - Модель данных для групп
 struct Group: Identifiable, Decodable {
@@ -228,6 +229,7 @@ struct ContentView: View {
     @State private var play: Bool = true
     @State private var apiConnection: Bool = true
     
+    @State private var shouldCheckForNotificationNavigation = true
 
     // Фильтрованные группы
     var filteredGroups: [Group] {
@@ -522,6 +524,33 @@ struct ContentView: View {
                         weekSlider.append(lastDate.createNextWeek())
                     }
                 }
+                
+                // Проверяем, нужно ли перейти к определенной дате
+                if shouldCheckForNotificationNavigation && UserDefaults.standard.bool(forKey: "should_navigate_to_date") {
+                    if let timestamp = UserDefaults.standard.object(forKey: "notification_selected_date") as? TimeInterval {
+                        let date = Date(timeIntervalSince1970: timestamp)
+                        withAnimation {
+                            currentDate = date
+                        }
+                    }
+                    // Сбрасываем флаг после навигации
+                    UserDefaults.standard.set(false, forKey: "should_navigate_to_date")
+                    shouldCheckForNotificationNavigation = false
+                }
+                
+                // Добавляем наблюдатель для уведомлений
+                NotificationCenter.default.addObserver(
+                    forName: .openScheduleAtDate,
+                    object: nil,
+                    queue: .main
+                ) { [self] _ in
+                    if let timestamp = UserDefaults.standard.object(forKey: "notification_selected_date") as? TimeInterval {
+                        let date = Date(timeIntervalSince1970: timestamp)
+                        withAnimation {
+                            currentDate = date
+                        }
+                    }
+                }
             }
             .onDisappear {
                 NotificationCenter.default.removeObserver(self, name: .isTeacherModeChanged, object: nil)
@@ -531,7 +560,11 @@ struct ContentView: View {
     
     private func handleTeacherModeChange() {
         isTeacherMode = UserDefaults.standard.bool(forKey: "isTeacherMode")
-        print("isTeacherMode \(isTeacherMode)")
+        
+        // Отменяем все старые уведомления
+        NotificationManager.shared.cancelAllNotifications()
+        tasks = [] // Очищаем текущее расписание
+        
         if isTeacherMode {
             loadSavedTeachers()
             fetchTeachers()
@@ -543,30 +576,13 @@ struct ContentView: View {
     
     // MARK: - Функция для выбора группы
     func selectGroup(group: Group) {
-        selectedGroup = group.name
-        selectedGroupId = group.id
-        saveGroup(group: group)
-        
-        if let groupId = selectedGroupId {
-            fetchSchedule(forGroupId: groupId) { fetchedTasks in
-                DispatchQueue.main.async {
-                    self.tasks = fetchedTasks
-                }
-            }
-        }
+        updateScheduleForGroup(group.id, groupName: group.name)
+        isShowingPopover = false
     }
     
     func selectTeacher(teacher: Teacher) {
-        selectedTeacher = teacher.name
-        selectedTeacherId = teacher.id
-        saveTeacher(teacher: teacher)
-        if let teacherId = selectedTeacherId {
-            fetchTeacherSchedual(forTeacherId: teacherId) { fetchedTasks in
-                DispatchQueue.main.async {
-                    self.tasks = fetchedTasks
-                }
-            }
-        }
+        updateScheduleForTeacher(teacher.id, teacherName: teacher.name)
+        isShowingPopover = false
     }
     
     // MARK: - Сохранение выбранных данных в UserDefaults
@@ -963,9 +979,183 @@ struct ContentView: View {
         createWeek = false
         resetCreateWeekFlag()
     }
+    
+    // Функция для обновления расписания при смене группы
+    private func updateScheduleForGroup(_ groupId: Int, groupName: String) {
+        // Отменяем все старые уведомления
+        NotificationManager.shared.cancelAllNotifications()
+        
+        // Сохраняем новую группу
+        selectedGroupId = groupId
+        selectedGroup = groupName
+        UserDefaults.standard.set(groupId, forKey: "selectedGroupId")
+        UserDefaults.standard.set(groupName, forKey: "selectedGroupName")
+        
+        // Загружаем новое расписание
+        fetchScheduleWithCache(forGroupId: groupId) { tasks in
+            DispatchQueue.main.async {
+                self.tasks = tasks
+            }
+        }
+    }
+    
+    // Функция для обновления расписания при смене преподавателя
+    private func updateScheduleForTeacher(_ teacherId: Int, teacherName: String) {
+        // Отменяем все старые уведомления
+        NotificationManager.shared.cancelAllNotifications()
+        
+        // Сохраняем нового преподавателя
+        selectedTeacherId = teacherId
+        selectedTeacher = teacherName
+        UserDefaults.standard.set(teacherId, forKey: "savedTeachersId")
+        UserDefaults.standard.set(teacherName, forKey: "savedTeachersName")
+        
+        // Загружаем новое расписание
+        fetchTeacherScheduleWithCache(forTeacherId: teacherId) { tasks in
+            DispatchQueue.main.async {
+                self.tasks = tasks
+            }
+        }
+    }
 }
 
 // MARK: - Превью (для Canvas)
 #Preview {
     ContentView()
+}
+
+// MARK: - API Cache Manager
+private extension ContentView {
+    func fetchScheduleWithCache(forGroupId groupId: Int, completion: @escaping ([Task]) -> Void) {
+        // Очищаем старые уведомления перед загрузкой нового расписания
+        NotificationManager.shared.cancelAllNotifications()
+        
+        // Проверяем наличие кэша и его актуальность
+        if let cachedData = CacheManager.load(filename: "schedule_group_\(groupId).json"),
+           let cacheDate = UserDefaults.standard.object(forKey: "cache_date_\(groupId)") as? Date,
+           Date().timeIntervalSince(cacheDate) < 300 { // Кэш валиден 5 минут
+            
+            do {
+                let decoder = JSONDecoder()
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                let scheduleItems = try decoder.decode([ScheduleItem].self, from: cachedData)
+                let tasks = processScheduleData(scheduleItems: scheduleItems)
+                
+                // Сохраняем в кэш с новым ID группы
+                CacheManager.save(data: cachedData, filename: "schedule_group_\(groupId).json")
+                UserDefaults.standard.set(Date(), forKey: "cache_date_\(groupId)")
+                
+                // Планируем новые уведомления
+                tasks.forEach { task in
+                    NotificationManager.shared.scheduleLessonNotification(for: task)
+                }
+                
+                DispatchQueue.main.async {
+                    apiConnection = true
+                    completion(tasks)
+                }
+            } catch {
+                print("Ошибка декодирования кэша: \(error)")
+            }
+        }
+        
+        // Если кэш отсутствует или устарел - загружаем с API
+        guard let url = URL(string: "https://api.mindenit.org/schedule/groups/\(groupId)") else {
+            print("Неверный URL")
+            apiConnection = false
+            return
+        }
+        
+        let task = URLSession.shared.dataTask(with: url) { data, response, error in
+            if let error = error {
+                print("Ошибка загрузки: \(error)")
+                apiConnection = false
+                return
+            }
+            
+            guard let data = data else {
+                print("Нет данных")
+                return
+            }
+            
+            do {
+                let decoder = JSONDecoder()
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                let scheduleItems = try decoder.decode([ScheduleItem].self, from: data)
+                
+                // Сохраняем в кэш с новым ID группы
+                CacheManager.save(data: data, filename: "schedule_group_\(groupId).json")
+                UserDefaults.standard.set(Date(), forKey: "cache_date_\(groupId)")
+                
+                let tasks = processScheduleData(scheduleItems: scheduleItems)
+                
+                // Планируем новые уведомления
+                tasks.forEach { task in
+                    NotificationManager.shared.scheduleLessonNotification(for: task)
+                }
+                
+                DispatchQueue.main.async {
+                    apiConnection = true
+                    completion(tasks)
+                }
+            } catch {
+                print("Ошибка декодирования: \(error)")
+            }
+        }
+        task.resume()
+    }
+    
+    func fetchTeacherScheduleWithCache(forTeacherId teacherId: Int, completion: @escaping ([Task]) -> Void) {
+        // Проверяем кэш
+        if let cachedData = CacheManager.load(filename: "schedule_teacher_\(teacherId).json"),
+           let cacheDate = UserDefaults.standard.object(forKey: "cache_date_teacher_\(teacherId)") as? Date,
+           Date().timeIntervalSince(cacheDate) < 300 {
+            
+            do {
+                let decoder = JSONDecoder()
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                let scheduleItems = try decoder.decode([TeacherAPI].self, from: cachedData)
+                let tasks = processScheduleTeacherData(scheduleItems: scheduleItems)
+                completion(tasks)
+                return
+            } catch {
+                print("Ошибка декодирования кэша преподавателя: \(error)")
+            }
+        }
+        
+        guard let url = URL(string: "https://api.mindenit.org/schedule/teachers/\(teacherId)") else {
+            print("Неверный URL")
+            apiConnection = false
+            return
+        }
+        
+        let task = URLSession.shared.dataTask(with: url) { data, response, error in
+            if let error = error {
+                print("Ошибка загрузки: \(error)")
+                apiConnection = false
+                return
+            }
+            
+            guard let data = data else {
+                print("Нет данных")
+                return
+            }
+            
+            do {
+                let decoder = JSONDecoder()
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                let scheduleItems = try decoder.decode([TeacherAPI].self, from: data)
+                
+                // Сохраняем в кэш
+                CacheManager.save(data: data, filename: "schedule_teacher_\(teacherId).json")
+                UserDefaults.standard.set(Date(), forKey: "cache_date_teacher_\(teacherId)")
+                
+                let tasks = processScheduleTeacherData(scheduleItems: scheduleItems)
+                completion(tasks)
+            } catch {
+                print("Ошибка декодирования: \(error)")
+            }
+        }
+        task.resume()
+    }
 }
