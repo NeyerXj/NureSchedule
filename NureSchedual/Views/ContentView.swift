@@ -168,6 +168,37 @@ struct CacheManager {
         return try? Data(contentsOf: url)
     }
 }
+struct RotatingLoaderView: View {
+    @State private var isRotating = false
+    @State private var opacity: Double = 0 // Добавляем состояние для прозрачности
+    var isFetchingSchedule: Bool
+
+    var body: some View {
+        if isFetchingSchedule {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .resizable()
+                .frame(width: 24, height: 20)
+                .foregroundStyle(.red)
+                .rotationEffect(.degrees(isRotating ? 360 : 0))
+                .opacity(opacity) // Применяем прозрачность
+                .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isRotating)
+                .onAppear { 
+                    // Запускаем обе анимации при появлении
+                    withAnimation(.easeIn(duration: 0.3)) {
+                        opacity = 1
+                    }
+                    isRotating = true 
+                }
+                .onDisappear { 
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        opacity = 0
+                    }
+                    isRotating = false 
+                }
+        }
+    }
+    
+}
 
 // MARK: - ContentView
 struct ContentView: View {
@@ -228,6 +259,7 @@ struct ContentView: View {
     @State private var isLoading: Bool = false // Состояние загрузки данных с API
     @State private var play: Bool = true
     @State private var apiConnection: Bool = true
+    @State private var isOnceLoadedNotif: Bool = false
     
     @State private var shouldCheckForNotificationNavigation = true
 
@@ -250,7 +282,9 @@ struct ContentView: View {
     
     // Сущность для мониторинга сети
     @StateObject private var networkMonitor = NetworkMonitor()
-    
+
+    @State private var isInitialLoadComplete: Bool = false
+
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 0) {
@@ -262,28 +296,49 @@ struct ContentView: View {
                             .font(
                                 Font.custom("Inter", size: 30)
                                     .weight(.bold)
-                            ).multilineTextAlignment(.center)
+                            )
+                            .multilineTextAlignment(.center)
                             .lineLimit(1)
                             .minimumScaleFactor(0.5)
                             .foregroundColor(.white.opacity(0.94))
-                        if !networkMonitor.isConnected{
-                            Image(systemName: "wifi.slash").resizable().frame(width: 20, height: 20).foregroundStyle(.red)
-                        }
-                        if !apiConnection{
-                            Image("noapi").resizable().frame(width: 22, height: 22).foregroundStyle(.red).scaledToFill().offset(y: 2)
-                        }
                         
-//                        GIFView(gifName: "animation", isPlaying: $play)
-//                            .frame(width: 40, height: 40)
-//                            .scaledToFit()
-//                            .opacity(isPlaying ? 1 : 0)
-//                            .animation(.easeInOut(duration: 0.3), value: isPlaying)
-                        
+                        // Группируем индикаторы состояния
+                        HStack(spacing: 8) {
+                            if !networkMonitor.isConnected {
+                                Image(systemName: "wifi.slash")
+                                    .resizable()
+                                    .frame(width: 20, height: 20)
+                                    .foregroundStyle(.red)
+                                    .transition(.opacity)
+                            }
+                            
+                            RotatingLoaderView(isFetchingSchedule: isFetchingSchedule)
+                                .transition(.opacity) // Добавляем transition
+                            
+                            if !apiConnection {
+                                Image("noapi")
+                                    .resizable()
+                                    .frame(width: 22, height: 22)
+                                    .foregroundStyle(.red)
+                                    .scaledToFill()
+                                    .offset(y: 2)
+                                    .transition(.opacity)
+                            }
+                        }
+                        .animation(.easeInOut(duration: 0.3), value: networkMonitor.isConnected)
+                        .animation(.easeInOut(duration: 0.3), value: isFetchingSchedule)
+                        .animation(.easeInOut(duration: 0.3), value: apiConnection)
                         
                         Spacer()
                         NavigationLink {
-                            FullScreenWeeklyScheduleView(tasks: tasks, selectedGroup: $selectedGroup, isShowingPopover: $isShowingPopover, isTeacherMode: $isTeacherMode, selectedTeacher: $selectedTeacher)
-                                .navigationTransition(.zoom(sourceID: "scheduleIcon", in: namespaceForSett))
+                            FullScreenWeeklyScheduleView(
+                                tasks: tasks,
+                                selectedGroup: $selectedGroup,
+                                isShowingPopover: $isShowingPopover,
+                                isTeacherMode: $isTeacherMode,
+                                selectedTeacher: $selectedTeacher
+                            )
+                            .navigationTransition(.zoom(sourceID: "scheduleIcon", in: namespaceForSett))
                         } label: {
                             VStack {
                                 Image(systemName: "calendar")
@@ -456,7 +511,7 @@ struct ContentView: View {
                 
                 // Основная часть экрана: либо индикатор загрузки, либо список задач
                 if isFetchingSchedule {
-                    LoadingView(isLoading:$isLoading)
+//                    LoadingView(isLoading:$isLoading)
                 } else {
                     ScrollView(.vertical) {
                         VStack {
@@ -498,59 +553,33 @@ struct ContentView: View {
             .background(Color(red:0.10,green:0.14,blue:0.24))
             .preferredColorScheme(.dark)
             .onAppear {
+                // Загружаем сохраненный режим
                 isTeacherMode = UserDefaults.standard.bool(forKey: "isTeacherMode")
+                print("TeacherMode: \(isTeacherMode)")
                 
-                NotificationCenter.default.addObserver(forName: .isTeacherModeChanged, object: nil, queue: .main) { _ in
-                    self.handleTeacherModeChange()
-                }
-                if !isOnceLoaded {
-                    if isTeacherMode {
-                        loadSavedTeachers()
-                        fetchTeachers()
-                    } else {
-                        loadSavedGroup()
-                        fetchGroups()
-                    }
-                    isOnceLoaded = true
-                }
-                
-                if weekSlider.isEmpty {
-                    let currentWeek = Date().fetchWeek()
-                    if let firstDate = currentWeek.first?.date {
-                        weekSlider.append(firstDate.createPreviousWeek())
-                    }
-                    weekSlider.append(currentWeek)
-                    if let lastDate = currentWeek.last?.date {
-                        weekSlider.append(lastDate.createNextWeek())
-                    }
-                }
-                
-                // Проверяем, нужно ли перейти к определенной дате
-                if shouldCheckForNotificationNavigation && UserDefaults.standard.bool(forKey: "should_navigate_to_date") {
-                    if let timestamp = UserDefaults.standard.object(forKey: "notification_selected_date") as? TimeInterval {
-                        let date = Date(timeIntervalSince1970: timestamp)
-                        withAnimation {
-                            currentDate = date
+                // Загружаем сохраненные данные в зависимости от режима
+                if isTeacherMode {handleTeacherModeChange(); isOnceLoadedNotif = false} else {
+                    print("TeacherMode: \(isTeacherMode)")
+                    if let groupId = UserDefaults.standard.object(forKey: "selectedGroupId") as? Int,
+                       let groupName = UserDefaults.standard.string(forKey: "selectedGroupName") {
+                        selectedGroupId = groupId
+                        selectedGroup = groupName
+                        
+                        fetchSchedule(forGroupId: groupId) { tasks in
+                            DispatchQueue.main.async {
+                                self.tasks = tasks
+                            }
                         }
+                        print("isOnce: \(isOnceLoadedNotif)")
+                        if !isOnceLoadedNotif{
+                            safeLoadingNotification(groupId: groupId)
+                        }
+                        isOnceLoadedNotif = true
+                         
                     }
-                    // Сбрасываем флаг после навигации
-                    UserDefaults.standard.set(false, forKey: "should_navigate_to_date")
-                    shouldCheckForNotificationNavigation = false
                 }
                 
-                // Добавляем наблюдатель для уведомлений
-                NotificationCenter.default.addObserver(
-                    forName: .openScheduleAtDate,
-                    object: nil,
-                    queue: .main
-                ) { [self] _ in
-                    if let timestamp = UserDefaults.standard.object(forKey: "notification_selected_date") as? TimeInterval {
-                        let date = Date(timeIntervalSince1970: timestamp)
-                        withAnimation {
-                            currentDate = date
-                        }
-                    }
-                }
+                loadInitialData()
             }
             .onDisappear {
                 NotificationCenter.default.removeObserver(self, name: .isTeacherModeChanged, object: nil)
@@ -558,31 +587,122 @@ struct ContentView: View {
         }
     }
     
+    private func safeLoadingNotification(groupId: Int) {
+        fetchScheduleWithCache(forGroupId: groupId) { newTasks in
+            DispatchQueue.main.async {
+                self.tasks.removeAll()
+                self.tasks = newTasks
+            }
+        }
+    }
+    
     private func handleTeacherModeChange() {
-        isTeacherMode = UserDefaults.standard.bool(forKey: "isTeacherMode")
-        
-        // Отменяем все старые уведомления
+        // Очищаем текущее расписание и уведомления
+        tasks = []
         NotificationManager.shared.cancelAllNotifications()
-        tasks = [] // Очищаем текущее расписание
+        
+        // Показываем индикатор загрузки
+        isFetchingSchedule = true
         
         if isTeacherMode {
-            loadSavedTeachers()
-            fetchTeachers()
+            // Переключаемся на режим преподавателя
+            selectedGroup = "Выберите группу"
+            selectedGroupId = nil
+            
+            if let teacherId = UserDefaults.standard.object(forKey: "savedTeachersId") as? Int,
+               let teacherName = UserDefaults.standard.string(forKey: "savedTeachersName") {
+                selectedTeacherId = teacherId
+                selectedTeacher = teacherName
+                
+                // Загружаем расписание преподавателя
+                fetchTeacherScheduleWithCache(forTeacherId: teacherId) { newTasks in
+                    DispatchQueue.main.async {
+                        self.tasks = newTasks
+                        self.isFetchingSchedule = false
+                        // Обновляем уведомления после загрузки расписания
+                        NotificationManager.shared.updateScheduleNotifications(force: true)
+                    }
+                }
+            } else {
+                self.isFetchingSchedule = false
+            }
         } else {
-            loadSavedGroup()
-            fetchGroups()
+            // Переключаемся на режим группы
+            selectedTeacher = "Выберите преподавателя"
+            selectedTeacherId = nil
+            
+            if let groupId = UserDefaults.standard.object(forKey: "selectedGroupId") as? Int,
+               let groupName = UserDefaults.standard.string(forKey: "selectedGroupName") {
+                selectedGroupId = groupId
+                selectedGroup = groupName
+                
+                // Загружаем расписание группы
+                fetchScheduleWithCache(forGroupId: groupId) { newTasks in
+                    DispatchQueue.main.async {
+                        self.tasks = newTasks
+                        self.isFetchingSchedule = false
+                        // Обновляем уведомления после загрузки расписания
+                        NotificationManager.shared.updateScheduleNotifications(force: true)
+                    }
+                }
+            } else {
+                self.isFetchingSchedule = false
+            }
         }
+        
+        // Сохраняем режим
+        UserDefaults.standard.set(isTeacherMode, forKey: "isTeacherMode")
     }
     
     // MARK: - Функция для выбора группы
     func selectGroup(group: Group) {
-        updateScheduleForGroup(group.id, groupName: group.name)
         isShowingPopover = false
+        isFetchingSchedule = true
+        tasks = []
+        
+        // Обновляем режим преподавателя
+        isTeacherMode = false
+        UserDefaults.standard.set(false, forKey: "isTeacherMode")
+        
+        selectedGroupId = group.id
+        selectedGroup = group.name
+        UserDefaults.standard.set(group.id, forKey: "selectedGroupId")
+        UserDefaults.standard.set(group.name, forKey: "selectedGroupName")
+        
+        fetchScheduleWithCache(forGroupId: group.id) { newTasks in
+            DispatchQueue.main.async {
+                if self.tasks != newTasks { // Проверяем, изменилось ли расписание
+                    self.tasks = newTasks
+                    NotificationManager.shared.updateScheduleNotifications(force: true)
+                }
+                self.isFetchingSchedule = false
+            }
+        }
     }
     
     func selectTeacher(teacher: Teacher) {
-        updateScheduleForTeacher(teacher.id, teacherName: teacher.name)
         isShowingPopover = false
+        isFetchingSchedule = true
+        tasks = []
+        
+        // Обновляем режим преподавателя
+        isTeacherMode = true
+        UserDefaults.standard.set(true, forKey: "isTeacherMode")
+        
+        selectedTeacherId = teacher.id
+        selectedTeacher = teacher.fullName
+        UserDefaults.standard.set(teacher.id, forKey: "savedTeachersId")
+        UserDefaults.standard.set(teacher.fullName, forKey: "savedTeachersName")
+        
+        fetchTeacherScheduleWithCache(forTeacherId: teacher.id) { newTasks in
+            DispatchQueue.main.async {
+                if self.tasks != newTasks { // Проверяем, изменилось ли расписание
+                    self.tasks = newTasks
+                    NotificationManager.shared.updateScheduleNotifications(force: true)
+                }
+                self.isFetchingSchedule = false
+            }
+        }
     }
     
     // MARK: - Сохранение выбранных данных в UserDefaults
@@ -673,6 +793,7 @@ struct ContentView: View {
             decodeAndProcessScheduleData(from: data, groupId: groupId, completion: completion)
             apiConnection = true
             isLoading = false
+//            safeLoadingNotification(groupId: groupId)
         }.resume()
     }
     
@@ -991,12 +1112,8 @@ struct ContentView: View {
         UserDefaults.standard.set(groupId, forKey: "selectedGroupId")
         UserDefaults.standard.set(groupName, forKey: "selectedGroupName")
         
-        // Загружаем новое расписание
-        fetchScheduleWithCache(forGroupId: groupId) { tasks in
-            DispatchQueue.main.async {
-                self.tasks = tasks
-            }
-        }
+        // Обновляем расписание и уведомления
+        NotificationManager.shared.updateScheduleNotifications()
     }
     
     // Функция для обновления расписания при смене преподавателя
@@ -1010,12 +1127,127 @@ struct ContentView: View {
         UserDefaults.standard.set(teacherId, forKey: "savedTeachersId")
         UserDefaults.standard.set(teacherName, forKey: "savedTeachersName")
         
-        // Загружаем новое расписание
-        fetchTeacherScheduleWithCache(forTeacherId: teacherId) { tasks in
-            DispatchQueue.main.async {
-                self.tasks = tasks
+        // Обновляем расписание и уведомления
+        NotificationManager.shared.updateScheduleNotifications()
+    }
+
+    private func loadInitialData() {
+        
+        // Сначала загружаем UI и основные данные
+        if weekSlider.isEmpty {
+            let currentWeek = Date().fetchWeek()
+            if let firstDate = currentWeek.first?.date {
+                weekSlider.append(firstDate.createPreviousWeek())
+            }
+            weekSlider.append(currentWeek)
+            if let lastDate = currentWeek.last?.date {
+                weekSlider.append(lastDate.createNextWeek())
             }
         }
+        
+        // Проверяем навигацию по уведомлениям
+        if shouldCheckForNotificationNavigation && UserDefaults.standard.bool(forKey: "should_navigate_to_date") {
+            if let timestamp = UserDefaults.standard.object(forKey: "notification_selected_date") as? TimeInterval {
+                let date = Date(timeIntervalSince1970: timestamp)
+                withAnimation {
+                    currentDate = date
+                }
+            }
+            UserDefaults.standard.set(false, forKey: "should_navigate_to_date")
+            shouldCheckForNotificationNavigation = false
+        }
+        
+        // Отложенно загружаем уведомления
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { // Даем время для отрисовки UI
+            loadNotifications()
+        }
+    }
+
+    private func loadNotifications() {
+        // Запускаем в фоновой очереди
+        DispatchQueue.global(qos: .background).async {
+            DispatchQueue.main.async {
+                isInitialLoadComplete = true
+            }
+        }
+    }
+
+    // Добавим функцию для переключения режима
+    func toggleTeacherMode() {
+        // Очищаем текущие данные и уведомления
+        tasks = []
+        NotificationManager.shared.cancelAllNotifications()
+        
+        // Показываем индикатор загрузки
+        isFetchingSchedule = true
+        
+        // Переключаем режим
+        isTeacherMode.toggle()
+        
+        if isTeacherMode {
+            // Переключаемся на режим преподавателя
+            selectedGroup = "Выберите группу"
+            selectedGroupId = nil
+            
+            // Проверяем, есть ли сохраненный преподаватель
+            if let teacherId = UserDefaults.standard.object(forKey: "savedTeachersId") as? Int,
+               let teacherName = UserDefaults.standard.string(forKey: "savedTeachersName") {
+                selectedTeacherId = teacherId
+                selectedTeacher = teacherName
+                
+                // Загружаем расписание преподавателя
+                fetchTeacherScheduleWithCache(forTeacherId: teacherId) { newTasks in
+                    DispatchQueue.main.async {
+                        self.tasks = newTasks
+                        self.isFetchingSchedule = false
+                        NotificationManager.shared.updateScheduleNotifications(force: true)
+                    }
+                }
+            } else {
+                // Если нет сохраненного преподавателя, показываем диалог выбора
+                selectedTeacher = "Выберите преподавателя"
+                selectedTeacherId = nil
+                isShowingPopover = true
+                isFetchingSchedule = false
+            }
+            
+            // Загружаем список преподавателей
+            loadSavedTeachers()
+            fetchTeachers()
+        } else {
+            // Переключаемся на режим группы
+            selectedTeacher = "Выберите преподавателя"
+            selectedTeacherId = nil
+            
+            // Проверяем, есть ли сохраненная группа
+            if let groupId = UserDefaults.standard.object(forKey: "selectedGroupId") as? Int,
+               let groupName = UserDefaults.standard.string(forKey: "selectedGroupName") {
+                selectedGroupId = groupId
+                selectedGroup = groupName
+                
+                // Загружаем расписание группы
+                fetchScheduleWithCache(forGroupId: groupId) { newTasks in
+                    DispatchQueue.main.async {
+                        self.tasks = newTasks
+                        self.isFetchingSchedule = false
+                        NotificationManager.shared.updateScheduleNotifications(force: true)
+                    }
+                }
+            } else {
+                // Если нет сохраненной группы, показываем диалог выбора
+                selectedGroup = "Выберите группу"
+                selectedGroupId = nil
+                isShowingPopover = true
+                isFetchingSchedule = false
+            }
+            
+            // Загружаем список групп
+            loadSavedGroup()
+            fetchGroups()
+        }
+        
+        // Сохраняем режим
+        UserDefaults.standard.set(isTeacherMode, forKey: "isTeacherMode")
     }
 }
 

@@ -121,9 +121,11 @@ struct SettingsSwiftUIView: View {
     @AppStorage("isProgessBar") private var isProgessBar: Bool = true
     @AppStorage("isGestrue") private var isGestrue: Bool = false
     @State private var showClearCahceView: Bool = false
+    @State private var isDebugingNotif: Bool = true
     @StateObject private var networkMonitor = NetworkMonitor()
     @AppStorage("isScheduleChangesNotificationsEnabled") private var isScheduleChangesNotificationsEnabled: Bool = true
     @AppStorage("isLessonStartNotificationsEnabled") private var isLessonStartNotificationsEnabled: Bool = true
+    @AppStorage("isNotificationsEnabled") private var isNotificationsEnabled: Bool = true
     private var selectedDate: Binding<Date> {
             Binding(
                 get: { Date(timeIntervalSince1970: progressEndDate) },
@@ -221,7 +223,7 @@ struct SettingsSwiftUIView: View {
                                 .foregroundColor(.white)
                                 .padding(.top).offset(y:-10)
                             
-                            Toggle(isOn: $isScheduleChangesNotificationsEnabled) {
+                            Toggle(isOn: $isNotificationsEnabled) {
                                 VStack(alignment: .leading) {
                                     Text("Зміни у розкладі")
                                         .font(.custom("Inter", size: 17).weight(.semibold))
@@ -257,8 +259,50 @@ struct SettingsSwiftUIView: View {
                         
                         // Новые кнопки: переход на очистку кеша и связь с поддержкой
                         
-                        
-                        
+                        if isDebugingNotif{
+                            Button(action: {
+    //                            NotificationManager.shared.scheduleTestNotification()
+    //                            NotificationManager.shared.scheduleTestLessonNotification()
+                                UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+                            }) {
+                                HStack {
+                                    Image(systemName: "bell.badge")
+                                        .foregroundColor(.blue)
+                                    Text("Удалить")
+                                        .foregroundColor(.primary)
+                                }
+                                .padding()
+                                .background(Color.secondary.opacity(0.2))
+                                .cornerRadius(10)
+                            }
+                            .padding(.horizontal)
+
+                            Button(action: {
+                                UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+                                    print("\n📋 Активные уведомления (\(requests.count)):")
+                                    for request in requests {
+                                        print("🔔 ID: \(request.identifier)")
+                                        print("📝 Заголовок: \(request.content.title)")
+                                        print("Name: \(request.content.body)")
+                                        if let trigger = request.trigger as? UNCalendarNotificationTrigger {
+                                            print("⏰ Дата: \(trigger.dateComponents)")
+                                        }
+                                        print("---")
+                                    }
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: "list.bullet")
+                                        .foregroundColor(.green)
+                                    Text("Показати активні повідомлення")
+                                        .foregroundColor(.primary)
+                                }
+                                .padding()
+                                .background(Color.secondary.opacity(0.2))
+                                .cornerRadius(10)
+                            }
+                            .padding(.horizontal)
+                        }
 
                     }
                     

@@ -58,7 +58,7 @@ struct TeacherAPI: Identifiable, Decodable {
     }
 }
 
-struct Task: Identifiable {
+struct Task: Identifiable, Equatable {
     let id = UUID()
     let title: String
     let fullTitle: String

@@ -28,30 +28,33 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             UserDefaults.standard.set(true, forKey: "should_navigate_to_date")
         }
         
-        // Регистрируем задачу для фоновой проверки
-        BGTaskScheduler.shared.register(
-            forTaskWithIdentifier: "KV-corporation.NureSchedual.schedulecheck",
-            using: nil
-        ) { task in
-            self.handleScheduleCheck(task: task as! BGAppRefreshTask)
-        }
-        
-        // Регистрируем для фоновых уведомлений
-        application.registerForRemoteNotifications()
-        
-        // Запрашиваем разрешение на уведомления с дополнительными опциями
-        UNUserNotificationCenter.current().requestAuthorization(
-            options: [.alert, .sound, .badge, .provisional, .criticalAlert]
-        ) { granted, error in
-            if granted {
-                print("✅ Разрешение на уведомления получено")
-            } else {
-                print("❌ Разрешение на уведомления не получено")
-                if let error = error {
-                    print("Ошибка: \(error.localizedDescription)")
-                }
+        // Настройка фоновых задач
+        if #available(iOS 13.0, *) {
+            BGTaskScheduler.shared.register(
+                forTaskWithIdentifier: "KV-corporation.NureSchedual.schedulecheck",
+                using: nil
+            ) { task in
+                self.handleScheduleCheck(task: task as! BGAppRefreshTask)
             }
         }
+        
+        // Запрашиваем все возможные разрешения для уведомлений
+        UNUserNotificationCenter.current().requestAuthorization(
+            options: [.alert, .badge, .sound, .provisional, .criticalAlert]
+        ) { granted, error in
+            if granted {
+                print("✅ Все разрешения на уведомления получены")
+                // Регистрируем для пуш-уведомлений
+                DispatchQueue.main.async {
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
+            } else {
+                print("❌ Разрешения на уведомления отклонены: \(error?.localizedDescription ?? "неизвестная ошибка")")
+            }
+        }
+        
+        // Включаем фоновое обновление
+        application.setMinimumBackgroundFetchInterval(UIApplication.backgroundFetchIntervalMinimum)
         
         return true
     }
@@ -64,33 +67,42 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         }
     }
     
-    func handleScheduleCheck(task: BGAppRefreshTask) {
-        // Получаем сохраненный ID группы
+    // Обработчик фоновой задачи
+    private func handleScheduleCheck(task: BGAppRefreshTask) {
+        print("🔄 Начало фоновой проверки расписания")
+        
+        // Устанавливаем обработчик истечения времени
+        task.expirationHandler = {
+            print("⚠️ Время выполнения фоновой задачи истекло")
+            task.setTaskCompleted(success: false)
+        }
+        
+        // Проверяем сохраненные данные группы/преподавателя
         if let groupId = UserDefaults.standard.object(forKey: "selectedGroupId") as? Int {
-            let scheduleChecker = ScheduleChecker()
+            print("📱 Обновление расписания для группы ID: \(groupId)")
             
-            // Добавляем обработчик завершения задачи
-            task.expirationHandler = {
-                task.setTaskCompleted(success: false)
-            }
+            // Здесь добавьте вашу логику обновления расписания
+            // Например, вызов API и обновление уведомлений
             
-            // Проверяем изменения
-            scheduleChecker.checkScheduleChanges(groupId: groupId) {
-                // Планируем следующую проверку
-                self.scheduleNextCheck()
-                task.setTaskCompleted(success: true)
-            }
+            // После успешного обновления
+            self.scheduleNextCheck()
+            task.setTaskCompleted(success: true)
+        } else {
+            print("❌ Нет сохраненной группы для обновления")
+            task.setTaskCompleted(success: false)
         }
     }
     
-    func scheduleNextCheck() {
+    // Планирование следующей проверки
+    private func scheduleNextCheck() {
         let request = BGAppRefreshTaskRequest(identifier: "KV-corporation.NureSchedual.schedulecheck")
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 3600) // Проверка каждый час
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 900) // Проверка каждые 15 минут
         
         do {
             try BGTaskScheduler.shared.submit(request)
+            print("✅ Следующая фоновая проверка запланирована")
         } catch {
-            print("Не удалось запланировать проверку: \(error)")
+            print("❌ Ошибка планирования следующей проверки: \(error.localizedDescription)")
         }
     }
     
@@ -101,7 +113,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         // Показываем уведомление даже когда приложение активно
-        completionHandler([.banner, .sound, .badge])
+        completionHandler([.banner, .sound])
     }
     
     // Обработка нажатия на уведомление когда приложение запущено
@@ -110,6 +122,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        print("👆 Пользователь нажал на уведомление: \(response.notification.request.identifier)")
         if response.actionIdentifier == "VIEW_ACTION" || response.actionIdentifier == UNNotificationDefaultActionIdentifier {
             if let dateString = response.notification.request.content.userInfo["first_change_date"] as? String,
                let date = ISO8601DateFormatter().date(from: dateString) {
@@ -119,6 +132,57 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             }
         }
         completionHandler()
+    }
+    
+    // Обработка фоновых обновлений
+    func application(_ application: UIApplication, performFetchWithCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        print("🔄 Начало фонового обновления")
+        
+        // Проверяем сохраненные данные
+        if let groupId = UserDefaults.standard.object(forKey: "selectedGroupId") as? Int {
+            // Обновляем расписание и уведомления
+            fetchAndUpdateSchedule(for: groupId) { success in
+                completionHandler(success ? .newData : .failed)
+            }
+        } else {
+            completionHandler(.noData)
+        }
+    }
+    
+    private func fetchAndUpdateSchedule(for groupId: Int, completion: @escaping (Bool) -> Void) {
+        guard let url = URL(string: "https://api.mindenit.org/schedule/groups/\(groupId)") else {
+            completion(false)
+            return
+        }
+        
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            guard let data = data else {
+                completion(false)
+                return
+            }
+            
+            do {
+                let decoder = JSONDecoder()
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                let scheduleItems = try decoder.decode([ScheduleItem].self, from: data)
+                
+                // Сохраняем в кэш
+                CacheManager.save(data: data, filename: "schedule_group_\(groupId).json")
+                UserDefaults.standard.set(Date(), forKey: "cache_date_\(groupId)")
+                
+                // Обновляем уведомления
+                let tasks = processScheduleData(scheduleItems: scheduleItems)
+                NotificationManager.shared.cancelAllNotifications()
+                tasks.forEach { task in
+                    NotificationManager.shared.scheduleLessonNotification(for: task)
+                }
+                
+                completion(true)
+            } catch {
+                print("❌ Ошибка обновления расписания: \(error)")
+                completion(false)
+            }
+        }.resume()
     }
 }
 

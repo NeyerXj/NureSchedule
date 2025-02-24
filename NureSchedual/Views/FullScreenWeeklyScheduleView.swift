@@ -78,15 +78,15 @@ struct FullScreenWeeklyScheduleView: View {
         }
 
         // Отладочные выводы
-        print("Сегодня: \(self.today)")
-        print("Граница начала: \(self.minDate)")
-        print("Граница конца: \(self.maxDate)")
-        print("startDate (1-е число месяца): \(startDate)")
+//        print("Сегодня: \(self.today)")
+//        print("Граница начала: \(self.minDate)")
+//        print("Граница конца: \(self.maxDate)")
+//        print("startDate (1-е число месяца): \(startDate)")
 
         // Загружаем только текущий месяц
         self._displayedDays = State(initialValue: Self.generateDisplayedDays(for: startDate))
 
-        print("Загруженные дни: \(self._displayedDays.wrappedValue.map { $0.formatted(date: .abbreviated, time: .omitted) })")
+//        print("Загруженные дни: \(self._displayedDays.wrappedValue.map { $0.formatted(date: .abbreviated, time: .omitted) })")
     }
 
     var body: some View {
