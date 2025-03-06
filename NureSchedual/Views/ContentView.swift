@@ -234,7 +234,7 @@ struct ContentView: View {
     @State private var isTeacherMode: Bool = false
     @Namespace var namespaceForSett
     @AppStorage("isInfinityPlaing") private var isPlaying: Bool = false
-    @AppStorage("isProgessBar") private var isProgessBar: Bool = true
+    @AppStorage("isProgessBar") private var isProgessBar: Bool = false
     @AppStorage("isGestrue") private var isGestrue: Bool = false
     
     @State private var isOnceLoaded: Bool = false

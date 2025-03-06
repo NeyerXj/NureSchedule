@@ -118,10 +118,10 @@ struct SettingsSwiftUIView: View {
     @AppStorage("isTeacherMode") private var isTeacherMode: Bool = false
     @AppStorage("isInfinityPlaing") private var isInfinityPlaing: Bool = false
     @AppStorage("areNotificationsEnabled") private var areNotificationsEnabled: Bool = true
-    @AppStorage("isProgessBar") private var isProgessBar: Bool = true
+    @AppStorage("isProgessBar") private var isProgessBar: Bool = false
     @AppStorage("isGestrue") private var isGestrue: Bool = false
     @State private var showClearCahceView: Bool = false
-    @State private var isDebugingNotif: Bool = true
+    @State private var isDebugingNotif: Bool = false
     @StateObject private var networkMonitor = NetworkMonitor()
     @AppStorage("isScheduleChangesNotificationsEnabled") private var isScheduleChangesNotificationsEnabled: Bool = true
     @AppStorage("isLessonStartNotificationsEnabled") private var isLessonStartNotificationsEnabled: Bool = true
@@ -167,9 +167,9 @@ struct SettingsSwiftUIView: View {
                             Divider()
                                 .background(Color.white.opacity(0.3))
                             Toggle(isOn: $isProgessBar) {
-                                Text("Відображення прогресу курсу ")
+                                Text("Прогресу курсу ")
                                     .font(.custom("Inter", size: 17).weight(.semibold))
-                                    .foregroundColor(.white).lineLimit(1).minimumScaleFactor(0.5)
+                                    .foregroundColor(.white).lineLimit(1).minimumScaleFactor(1)
                             }
                             .toggleStyle(CustomToggleStyle())
 
@@ -223,20 +223,20 @@ struct SettingsSwiftUIView: View {
                                 .foregroundColor(.white)
                                 .padding(.top).offset(y:-10)
                             
-                            Toggle(isOn: $isNotificationsEnabled) {
-                                VStack(alignment: .leading) {
-                                    Text("Зміни у розкладі")
-                                        .font(.custom("Inter", size: 17).weight(.semibold))
-                                        .foregroundColor(.white)
-                                    Text("Сповіщення про зміни аудиторій та скасування пар")
-                                        .font(.custom("Inter", size: 14))
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            .toggleStyle(CustomToggleStyle())
-                            
-                            Divider()
-                                .background(Color.white.opacity(0.3))
+//                            Toggle(isOn: $isNotificationsEnabled) {
+//                                VStack(alignment: .leading) {
+//                                    Text("Зміни у розкладі")
+//                                        .font(.custom("Inter", size: 17).weight(.semibold))
+//                                        .foregroundColor(.white)
+//                                    Text("Сповіщення про зміни аудиторій та скасування пар")
+//                                        .font(.custom("Inter", size: 14))
+//                                        .foregroundColor(.gray)
+//                                }
+//                            }
+//                            .toggleStyle(CustomToggleStyle())
+//                            
+//                            Divider()
+//                                .background(Color.white.opacity(0.3))
                             
                             Toggle(isOn: $isLessonStartNotificationsEnabled) {
                                 VStack(alignment: .leading) {
