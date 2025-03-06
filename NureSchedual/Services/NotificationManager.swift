@@ -43,7 +43,7 @@ class NotificationManager {
         }
     }
     
-    // Планирование уведомления о начале пары
+    // Планирование уведомления о начале пар
     func scheduleLessonNotification(for task: Task) {
         guard task.title != "Break" else { return }
         
