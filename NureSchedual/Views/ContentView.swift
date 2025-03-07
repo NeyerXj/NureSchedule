@@ -1022,14 +1022,19 @@ struct ContentView: View {
                                 
                                 if !isLastForToday {
                                     ZStack(alignment: .top) {
+                                        // Фоновая линия
                                         Rectangle()
-                                            .frame(width: 1, height: 70)
+                                            .frame(width: 1)
+                                            .frame(height: getProgressLineHeight(from: tasks[index], to: tasks[index + 1]))
                                             .foregroundColor(.black)
+                                        
+                                        // Линия прогресса
                                         Rectangle()
-                                            .frame(width: 1, height: progressHeight(for: tasks[index]))
+                                            .frame(width: 1)
+                                            .frame(height: progressHeight(for: tasks[index]))
                                             .foregroundColor(.green)
                                     }
-                                    .offset(x: 24, y: 45)
+                                    .offset(x: 24, y: getLineOffset(for: tasks[index]))
                                 }
                             }
                     }
@@ -1041,24 +1046,94 @@ struct ContentView: View {
         .padding(.top)
     }
     
-    // MARK: - Расчёт высоты прогресса между задачами
+    // Обновляем функции для прогресс-бара
+    private func getLineHeight(for task: Task) -> CGFloat {
+        if task.title == "Break" {
+            return 40
+        } else if !task.subTasks.isEmpty {
+            return 120 // Высота для сгруппированных задач
+        } else {
+            return 70 // Уменьшаем высоту для обычных пар
+        }
+    }
+
+    private func getLineOffset(for task: Task) -> CGFloat {
+            if task.title == "Break" {
+            return 35 // Для перерыва
+            } else if !task.subTasks.isEmpty {
+            return 35 // Для сгруппированных задач - начинаем от верха
+            } else {
+            return 30 // Уменьшаем смещение для обычных пар
+        }
+    }
+
     func progressHeight(for task: Task) -> CGFloat {
         guard let nextTask = nextTask(after: task) else {
-            return 45
+            return 0
         }
         
-        let totalInterval = nextTask.date.timeIntervalSince(task.date)
-        let elapsedInterval = Date().timeIntervalSince(task.date)
-        let progress = max(0, min(1, elapsedInterval / totalInterval))
-        return CGFloat(progress * 70)
+        let now = Date()
+        let taskStart = task.date
+        let taskEnd = nextTask.date
+        
+        // Если время еще не наступило
+        if now < taskStart {
+            return 0
+        }
+        
+        // Если время уже прошло
+        if now > taskEnd {
+            return getProgressLineHeight(from: task, to: nextTask)
+        }
+        
+        // Вычисляем прогресс
+        let totalDuration = taskEnd.timeIntervalSince(taskStart)
+        let elapsed = now.timeIntervalSince(taskStart)
+        let progress = max(0, min(1, elapsed / totalDuration))
+        
+        return CGFloat(progress * Double(getProgressLineHeight(from: task, to: nextTask)))
     }
-    
-    func nextTask(after currentTask: Task) -> Task? {
-        let nextTask = tasks
-            .filter { $0.date > currentTask.date }
-            .sorted(by: { $0.date < $1.date })
-            .first
-        return nextTask
+
+    // Обновляем функцию расчета высоты линии прогресса
+    private func getProgressLineHeight(from currentTask: Task, to nextTask: Task) -> CGFloat {
+        let currentOffset = getLineOffset(for: currentTask)
+        let nextOffset = getLineOffset(for: nextTask)
+        
+        // Рассчитываем высоту линии между задачами
+        if currentTask.title == "Break" && !nextTask.subTasks.isEmpty {
+            // От перерыва до групповой пары
+            return abs(nextOffset - currentOffset) + 60
+        } else if !currentTask.subTasks.isEmpty && nextTask.title == "Break" {
+            // От групповой пары до перерыва
+            return abs(nextOffset - currentOffset) + 120
+        } else if currentTask.title == "Break" {
+            // От перерыва до обычной пары
+            return abs(nextOffset - currentOffset) + 50
+        } else if nextTask.title == "Break" {
+            // От обычной пары до перерыва
+            return abs(nextOffset - currentOffset) + 65
+        } else if currentTask.subTasks.isEmpty && !nextTask.subTasks.isEmpty {
+            // От обычной пары до групповой
+            return 85
+        } else if !currentTask.subTasks.isEmpty && nextTask.subTasks.isEmpty {
+            // От групповой пары до обычной
+            return 85
+        } else if !currentTask.subTasks.isEmpty && !nextTask.subTasks.isEmpty {
+            // Между групповыми парами
+            return 120
+            } else {
+            // Между обычными парами
+            return 70
+        }
+    }
+
+    // Функция для определения следующей задачи
+    private func nextTask(after task: Task) -> Task? {
+        guard let currentIndex = tasks.firstIndex(where: { $0.id == task.id }),
+              currentIndex < tasks.count - 1 else {
+            return nil
+        }
+        return tasks[currentIndex + 1]
     }
     
     // MARK: - Отображение недели (строка дат)
@@ -1269,16 +1344,7 @@ struct ContentView: View {
                             }
                         }
                     }
-                } else {
-                    selectedTeacher = "Выберите преподавателя"
-                    selectedTeacherId = nil
-                    isShowingPopover = true
-                    isFetchingSchedule = false
-                    isModeSwitching = false
                 }
-                
-                loadSavedTeachers()
-                fetchTeachers()
             } else {
                 // Переключаемся на режим группы
                 selectedTeacher = "Выберите преподавателя"
@@ -1304,8 +1370,8 @@ struct ContentView: View {
                                 }
                             }
                         }
-                    }
-                } else {
+            }
+        } else {
                     selectedGroup = "Выберите группу"
                     selectedGroupId = nil
                     isShowingPopover = true
