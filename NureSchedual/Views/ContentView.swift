@@ -235,7 +235,7 @@ struct ContentView: View {
     @Namespace var namespaceForSett
     @AppStorage("isInfinityPlaing") private var isPlaying: Bool = false
     @AppStorage("isProgessBar") private var isProgessBar: Bool = false
-    @AppStorage("isGestrue") private var isGestrue: Bool = false
+    @AppStorage("isGestrue") private var isGestrue: Bool = true
     
     @State private var isOnceLoaded: Bool = false
     
@@ -285,6 +285,23 @@ struct ContentView: View {
 
     @State private var isInitialLoadComplete: Bool = false
 
+    // Добавляем новые состояния для контроля переключения режимов
+    @State private var isModeSwitching: Bool = false
+    @State private var pendingModeSwitch: Bool? = nil
+
+    // Добавьте новое состояние для отслеживания начальной точки свайпа
+    @State private var swipeStartLocation: CGFloat = 0
+
+    // Добавьте новое состояние для отслеживания активного свайпа
+    @State private var isSwipingDay: Bool = false
+
+    // Добавьте новое состояние
+    @State private var isNavigationActive: Bool = false
+
+    // Обновите состояния в начале ContentView
+    @State private var isShowingOnboarding = !UserDefaults.standard.bool(forKey: "hasSeenOnboarding")
+    @State private var isShowingFeatureTour = !UserDefaults.standard.bool(forKey: "hasSeenFeatureTour")
+
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 0) {
@@ -330,30 +347,6 @@ struct ContentView: View {
                         .animation(.easeInOut(duration: 0.3), value: apiConnection)
                         
                         Spacer()
-                        NavigationLink {
-                            FullScreenWeeklyScheduleView(
-                                tasks: tasks,
-                                selectedGroup: $selectedGroup,
-                                isShowingPopover: $isShowingPopover,
-                                isTeacherMode: $isTeacherMode,
-                                selectedTeacher: $selectedTeacher
-                            )
-                            .navigationTransition(.zoom(sourceID: "scheduleIcon", in: namespaceForSett))
-                        } label: {
-                            VStack {
-                                Image(systemName: "calendar")
-                                    .resizable()
-                                    .frame(width: 24, height: 24)
-                                    .foregroundColor(.black)
-                                    .padding(11)
-                                    .background(Color(red: 0.46, green: 0.61, blue: 0.95))
-                                    .clipShape(Circle())
-                                    .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
-                            }
-                            .matchedTransitionSource(id: "scheduleIcon", in: namespaceForSett)
-                        }
-                        .padding(.leading, 8)
-                        .accessibilityLabel("Розклад")
                         
                         Button(action: {
     
@@ -460,7 +453,30 @@ struct ContentView: View {
                                 .padding()
                             }
                         }
-                        
+                        NavigationLink {
+                            FullScreenWeeklyScheduleView(
+                                tasks: tasks,
+                                selectedGroup: $selectedGroup,
+                                isShowingPopover: $isShowingPopover,
+                                isTeacherMode: $isTeacherMode,
+                                selectedTeacher: $selectedTeacher
+                            )
+                            .navigationTransition(.zoom(sourceID: "scheduleIcon", in: namespaceForSett))
+                        } label: {
+                            VStack {
+                                Image(systemName: "calendar")
+                                    .resizable()
+                                    .frame(width: 24, height: 24)
+                                    .foregroundColor(.black)
+                                    .padding(11)
+                                    .background(Color(red: 0.46, green: 0.61, blue: 0.95))
+                                    .clipShape(Circle())
+                                    .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
+                            }
+                            .matchedTransitionSource(id: "scheduleIcon", in: namespaceForSett)
+                        }
+                        .padding(.leading, 0)
+                        .accessibilityLabel("Розклад")
                         NavigationLink {
                             ZStack {
                                 SettingsSwiftUIView()
@@ -479,7 +495,7 @@ struct ContentView: View {
                             }
                             .matchedTransitionSource(id: "icon", in: namespaceForSett)
                         }
-                        .padding(.leading, -2)
+                        .padding(.leading, 5)
                         .accessibilityLabel("Настройки")
                     }
                                                     
@@ -513,42 +529,57 @@ struct ContentView: View {
                 if isFetchingSchedule {
 //                    LoadingView(isLoading:$isLoading)
                 } else {
-                    ScrollView(.vertical) {
-                        VStack {
-                            TaskView() // Список «пар»
+                    GeometryReader { geometry in
+                        ScrollView(.vertical) {
+                            VStack {
+                                TaskView() // Список «пар»
+                            }
+                            .hSpacing(.center)
+                            .vSpacing(.center)
                         }
-                        .hSpacing(.center)
-                        .vSpacing(.center)
-                    }.offset(y: -20)
-                    .scrollIndicators(.hidden)
-                }
-            }.gesture(
-                DragGesture()
-                    .onEnded { value in
-                        let calendar = Calendar.current
-
-                        if value.translation.width > 50 && isGestrue {
-                            // Свайп влево (следующий день)
-                            if let nextDay = calendar.date(byAdding: .day, value: 1, to: currentDate) {
-                                DispatchQueue.main.async {
-                                    withAnimation {
-                                        currentDate = nextDay
+                        .offset(y: -20)
+                        .scrollIndicators(.hidden)
+                        .highPriorityGesture(isGestrue ? DragGesture(minimumDistance: 30)
+                            .onChanged { gesture in
+                                let horizontalAmount = gesture.translation.width
+                                let verticalAmount = gesture.translation.height
+                                
+                                // Если свайп преимущественно горизонтальный
+                                if abs(horizontalAmount) > abs(verticalAmount) {
+                                    isSwipingDay = true
+                                    if swipeStartLocation == 0 {
+                                        swipeStartLocation = gesture.location.x
                                     }
                                 }
                             }
-                        } else if value.translation.width < -50 && isGestrue {
-                            // Свайп вправо (предыдущий день)
-                            if let previousDay = calendar.date(byAdding: .day, value: -1, to: currentDate) {
-                                DispatchQueue.main.async {
+                            .onEnded { value in
+                                defer { 
+                                    swipeStartLocation = 0
+                                    isSwipingDay = false
+                                }
+                                
+                                let horizontalAmount = value.translation.width
+                                let verticalAmount = value.translation.height
+                                
+                                if abs(horizontalAmount) > abs(verticalAmount) && abs(horizontalAmount) > 50 {
                                     withAnimation {
-                                        currentDate = previousDay
+                                        if horizontalAmount > 0 {
+                                            if let previousDate = Calendar.current.date(byAdding: .day, value: -1, to: currentDate) {
+                                                performHapticFeedback()
+                                                currentDate = previousDate
+                                            }
+                                        } else {
+                                            if let nextDate = Calendar.current.date(byAdding: .day, value: 1, to: currentDate) {
+                                                performHapticFeedback()
+                                                currentDate = nextDate
+                                            }
+                                        }
                                     }
                                 }
-                            }
-                        }
+                            } : nil)
                     }
-            )
-            .vSpacing(.top)
+                }
+            }.vSpacing(.top)
             .frame(maxWidth: .infinity)
             .background(Color(red:0.10,green:0.14,blue:0.24))
             .preferredColorScheme(.dark)
@@ -584,6 +615,21 @@ struct ContentView: View {
             .onDisappear {
                 NotificationCenter.default.removeObserver(self, name: .isTeacherModeChanged, object: nil)
             }.navigationBarBackButtonHidden(true)
+            .overlay {
+                if isShowingOnboarding {
+                    OnboardingOverlayView(isShowingOnboarding: $isShowingOnboarding) {
+                        // Callback после завершения онбординга
+                        if !UserDefaults.standard.bool(forKey: "hasSeenFeatureTour") {
+                            isShowingFeatureTour = true
+                        }
+                    }
+                } else if isShowingFeatureTour {
+                    FeatureTourView(isShowingTour: $isShowingFeatureTour)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowFeatureTour"))) { _ in
+                isShowingFeatureTour = true
+            }
         }
     }
     
@@ -1058,8 +1104,10 @@ struct ContentView: View {
                 }
                 .hSpacing(.center)
                 .onTapGesture {
-                    withAnimation(.snappy) {
-                        currentDate = day.date
+                    if !isSwipingDay {
+                        withAnimation(.snappy) {
+                            currentDate = day.date
+                        }
                     }
                 }
             }
@@ -1172,8 +1220,17 @@ struct ContentView: View {
         }
     }
 
-    // Добавим функцию для переключения режима
+    // Обновляем функцию toggleTeacherMode
     func toggleTeacherMode() {
+        // Проверяем, не выполняется ли уже переключение режима
+        guard !isModeSwitching else {
+            // Сохраняем ожидающее изменение режима
+            pendingModeSwitch = !isTeacherMode
+            return
+        }
+        
+        isModeSwitching = true
+        
         // Очищаем текущие данные и уведомления
         tasks = []
         NotificationManager.shared.cancelAllNotifications()
@@ -1184,70 +1241,90 @@ struct ContentView: View {
         // Переключаем режим
         isTeacherMode.toggle()
         
-        if isTeacherMode {
-            // Переключаемся на режим преподавателя
-            selectedGroup = "Выберите группу"
-            selectedGroupId = nil
-            
-            // Проверяем, есть ли сохраненный преподаватель
-            if let teacherId = UserDefaults.standard.object(forKey: "savedTeachersId") as? Int,
-               let teacherName = UserDefaults.standard.string(forKey: "savedTeachersName") {
-                selectedTeacherId = teacherId
-                selectedTeacher = teacherName
-                
-                // Загружаем расписание преподавателя
-                fetchTeacherScheduleWithCache(forTeacherId: teacherId) { newTasks in
-                    DispatchQueue.main.async {
-                        self.tasks = newTasks
-                        self.isFetchingSchedule = false
-                        NotificationManager.shared.updateScheduleNotifications(force: true)
-                    }
-                }
-            } else {
-                // Если нет сохраненного преподавателя, показываем диалог выбора
-                selectedTeacher = "Выберите преподавателя"
-                selectedTeacherId = nil
-                isShowingPopover = true
-                isFetchingSchedule = false
-            }
-            
-            // Загружаем список преподавателей
-            loadSavedTeachers()
-            fetchTeachers()
-        } else {
-            // Переключаемся на режим группы
-            selectedTeacher = "Выберите преподавателя"
-            selectedTeacherId = nil
-            
-            // Проверяем, есть ли сохраненная группа
-            if let groupId = UserDefaults.standard.object(forKey: "selectedGroupId") as? Int,
-               let groupName = UserDefaults.standard.string(forKey: "selectedGroupName") {
-                selectedGroupId = groupId
-                selectedGroup = groupName
-                
-                // Загружаем расписание группы
-                fetchScheduleWithCache(forGroupId: groupId) { newTasks in
-                    DispatchQueue.main.async {
-                        self.tasks = newTasks
-                        self.isFetchingSchedule = false
-                        NotificationManager.shared.updateScheduleNotifications(force: true)
-                    }
-                }
-            } else {
-                // Если нет сохраненной группы, показываем диалог выбора
+        // Добавляем небольшую задержку перед загрузкой новых данных
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if isTeacherMode {
+                // Переключаемся на режим преподавателя
                 selectedGroup = "Выберите группу"
                 selectedGroupId = nil
-                isShowingPopover = true
-                isFetchingSchedule = false
+                
+                if let teacherId = UserDefaults.standard.object(forKey: "savedTeachersId") as? Int,
+                   let teacherName = UserDefaults.standard.string(forKey: "savedTeachersName") {
+                    selectedTeacherId = teacherId
+                    selectedTeacher = teacherName
+                    
+                    // Загружаем расписание преподавателя
+                    fetchTeacherScheduleWithCache(forTeacherId: teacherId) { newTasks in
+                        DispatchQueue.main.async {
+                            self.tasks = newTasks
+                            self.isFetchingSchedule = false
+                            self.isModeSwitching = false
+                            
+                            // Проверяем, есть ли ожидающее переключение
+                            if let pendingMode = self.pendingModeSwitch {
+                                self.pendingModeSwitch = nil
+                                if pendingMode != self.isTeacherMode {
+                                    self.toggleTeacherMode()
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    selectedTeacher = "Выберите преподавателя"
+                    selectedTeacherId = nil
+                    isShowingPopover = true
+                    isFetchingSchedule = false
+                    isModeSwitching = false
+                }
+                
+                loadSavedTeachers()
+                fetchTeachers()
+            } else {
+                // Переключаемся на режим группы
+                selectedTeacher = "Выберите преподавателя"
+                selectedTeacherId = nil
+                
+                if let groupId = UserDefaults.standard.object(forKey: "selectedGroupId") as? Int,
+                   let groupName = UserDefaults.standard.string(forKey: "selectedGroupName") {
+                    selectedGroupId = groupId
+                    selectedGroup = groupName
+                    
+                    // Загружаем расписание группы
+                    fetchScheduleWithCache(forGroupId: groupId) { newTasks in
+                        DispatchQueue.main.async {
+                            self.tasks = newTasks
+                            self.isFetchingSchedule = false
+                            self.isModeSwitching = false
+                            
+                            // Проверяем, есть ли ожидающее переключение
+                            if let pendingMode = self.pendingModeSwitch {
+                                self.pendingModeSwitch = nil
+                                if pendingMode != self.isTeacherMode {
+                                    self.toggleTeacherMode()
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    selectedGroup = "Выберите группу"
+                    selectedGroupId = nil
+                    isShowingPopover = true
+                    isFetchingSchedule = false
+                    isModeSwitching = false
+                }
+                
+                loadSavedGroup()
+                fetchGroups()
             }
             
-            // Загружаем список групп
-            loadSavedGroup()
-            fetchGroups()
+            // Сохраняем режим
+            UserDefaults.standard.set(isTeacherMode, forKey: "isTeacherMode")
         }
-        
-        // Сохраняем режим
-        UserDefaults.standard.set(isTeacherMode, forKey: "isTeacherMode")
+    }
+
+    private func performHapticFeedback() {
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
     }
 }
 

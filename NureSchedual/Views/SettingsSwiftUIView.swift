@@ -119,7 +119,7 @@ struct SettingsSwiftUIView: View {
     @AppStorage("isInfinityPlaing") private var isInfinityPlaing: Bool = false
     @AppStorage("areNotificationsEnabled") private var areNotificationsEnabled: Bool = true
     @AppStorage("isProgessBar") private var isProgessBar: Bool = false
-    @AppStorage("isGestrue") private var isGestrue: Bool = false
+    @AppStorage("isGestrue") private var isGestrue: Bool = true
     @State private var showClearCahceView: Bool = false
     @State private var isDebugingNotif: Bool = false
     @StateObject private var networkMonitor = NetworkMonitor()
@@ -303,6 +303,9 @@ struct SettingsSwiftUIView: View {
                             }
                             .padding(.horizontal)
                         }
+
+                        // Добавьте в секцию "Інше"
+                    
 
                     }
                     
