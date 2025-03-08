@@ -2,28 +2,24 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>UIRequiredDeviceCapabilities</key>
-	<array>
-		<string>armv7</string>
-	</array>
-	<key>NSUserNotificationUsageDescription</key>
-	<string>Мы используем уведомления для информирования об изменениях в расписании</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>processing</string>
-		<string>fetch</string>
-		<string>remote-notification</string>
-	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>KV-corporation.NureSchedual.schedulecheck</string>
 	</array>
+	<key>NSUserNotificationUsageDescription</key>
+	<string>Мы используем уведомления для информирования об изменениях в расписании</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Piazzolla-VariableFont_opsz,wght.ttf</string>
 		<string>Inter-Italic-VariableFont_opsz,wght.ttf</string>
 		<string>Inter.ttf</string>
 		<string>BaskervvilleSC.ttf</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>processing</string>
+		<string>fetch</string>
+		<string>remote-notification</string>
 	</array>
 </dict>
 </plist>

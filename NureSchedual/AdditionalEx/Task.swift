@@ -65,13 +65,55 @@ struct Task: Identifiable, Equatable {
     let caption: String
     let date: Date
     let tint: Color
-    
     var isCompleted: Bool = false
-    
-    // Новые поля:
     let auditory: String
     let type: String
     let teacher: String
+    var subTasks: [SubTask] = []
+    
+    init(
+        title: String,
+        fullTitle: String,
+        caption: String,
+        date: Date,
+        tint: Color,
+        isCompleted: Bool = false,
+        auditory: String,
+        type: String,
+        teacher: String,
+        subTasks: [SubTask] = []
+    ) {
+        self.title = title
+        self.fullTitle = fullTitle
+        self.caption = caption
+        self.date = date
+        self.tint = tint
+        self.isCompleted = isCompleted
+        self.auditory = auditory
+        self.type = type
+        self.teacher = teacher
+        self.subTasks = subTasks
+    }
+    
+    static func == (lhs: Task, rhs: Task) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
+// Добавляем структуру SubTask
+struct SubTask: Identifiable, Equatable {
+    let id = UUID()
+    let title: String
+    let fullTitle: String
+    let caption: String
+    let group: String
+    let auditory: String
+    let type: String
+    let teacher: String
+    
+    static func == (lhs: SubTask, rhs: SubTask) -> Bool {
+        lhs.id == rhs.id
+    }
 }
 
 var sampleTasks: [Task] = [
@@ -81,19 +123,23 @@ var sampleTasks: [Task] = [
         caption: "Аудитория 101",
         date: Date(),
         tint: .blue,
+        isCompleted: false,
         auditory: "101",
         type: "Лекція",
-        teacher: "Преподаватель Иванов"
+        teacher: "Преподаватель Иванов",
+        subTasks: []
     ),
     Task(
-        title: "Перерыв",
+        title: "Break",
         fullTitle: "",
         caption: "",
         date: Date(),
         tint: .gray,
+        isCompleted: false,
         auditory: "",
         type: "Перерва",
-        teacher: ""
+        teacher: "",
+        subTasks: []
     )
 ]
 
@@ -110,111 +156,195 @@ func colorForType(_ type: String) -> Color {
 }
 
 func processScheduleData(scheduleItems: [ScheduleItem]) -> [Task] {
+    // Группируем занятия по времени начала и предмету
+    let groupedItems = Dictionary(grouping: scheduleItems) { item in
+        // Создаем ключ группировки на основе времени и ID предмета
+        return "\(item.startTime)_\(item.subject.id)"
+    }
     var tasks: [Task] = []
     
-    for (index, item) in scheduleItems.enumerated() {
-        let taskTitle = item.subject.brief
-        let fullTaskTitle = item.subject.title
-        let taskDate = Date(timeIntervalSince1970: item.startTime)
+    for (_, items) in groupedItems {
+        // Сортируем items по времени, чтобы обеспечить последовательность
+        let sortedItems = items.sorted { $0.startTime < $1.startTime }
+        let firstItem = sortedItems[0]
         
-        // Сконструируем строку для caption (если нужно)
-        let taskCaption = "\(item.auditory)"
-        
-        // Определим цвет
-        let taskTint = colorForType(item.type)
-        
-        // Создаём задачу
-        let task = Task(
-            title: taskTitle,
-            fullTitle: fullTaskTitle,
-            caption: taskCaption,
-            date: taskDate,
-            tint: taskTint,
+        if sortedItems.count > 1 && firstItem.subject.id == sortedItems[1].subject.id {
+            // Если несколько групп на одну пару
+            let taskDate = Date(timeIntervalSince1970: firstItem.startTime)
             
-            // Новые поля
-            auditory: item.auditory,
-            type: item.type,
-            teacher: item.teachers.map { $0.shortName }.joined(separator: ", ")
-        )
-        tasks.append(task)
+            // Создаем основную задачу
+            var task = Task(
+                title: firstItem.subject.brief,
+                fullTitle: firstItem.subject.title,
+                caption: firstItem.auditory,
+                date: taskDate,
+                tint: colorForType(firstItem.type),
+                auditory: firstItem.auditory,
+                type: firstItem.type,
+                teacher: firstItem.teachers.map { $0.shortName }.joined(separator: ", "),
+                subTasks: sortedItems.map { item in
+                    SubTask(
+                        title: item.subject.brief,
+                        fullTitle: item.subject.title,
+                        caption: item.auditory,
+                        group: item.groups.map { $0.name }.joined(separator: ", "),
+                        auditory: item.auditory,
+                        type: item.type,
+                        teacher: item.teachers.map { $0.shortName }.joined(separator: ", ")
+                    )
+                }
+            )
+            
+            tasks.append(task)
+        } else {
+            // Если одна пара
+            let taskDate = Date(timeIntervalSince1970: firstItem.startTime)
+            
+            let task = Task(
+                title: firstItem.subject.brief,
+                fullTitle: firstItem.subject.title,
+                caption: firstItem.auditory,
+                date: taskDate,
+                tint: colorForType(firstItem.type),
+                auditory: firstItem.auditory,
+                type: firstItem.type,
+                teacher: firstItem.teachers.map { $0.shortName }.joined(separator: ", "),
+                subTasks: []
+            )
+            
+            tasks.append(task)
+        }
+    }
+    
+    // Сортируем все задачи по времени
+    let sortedTasks = tasks.sorted { $0.date < $1.date }
+    
+    // Добавляем перерывы между парами
+    var tasksWithBreaks: [Task] = []
+    for i in 0..<sortedTasks.count {
+        tasksWithBreaks.append(sortedTasks[i])
         
-        // Если между текущей парой и следующей есть «окно» по времени — добавим перерыв
-        if index < scheduleItems.count - 1 {
-            let nextStartTime = scheduleItems[index + 1].startTime
-            if nextStartTime > item.endTime {
-                let breakTask = Task(
-                    title: "Break",
-                    fullTitle: "",
-                    caption: "",
-                    date: Date(timeIntervalSince1970: item.endTime),
-                    tint: .gray,
-                    
-                    // Для break можно поставить заглушки
-                    auditory: "",
-                    type: "Перерва",
-                    teacher: ""
-                )
-                tasks.append(breakTask)
+        // Если есть следующая пара, проверяем нужен ли перерыв
+        if i < sortedTasks.count - 1 {
+            let currentEndTime = TimeInterval(sortedTasks[i].date.timeIntervalSince1970)
+            let nextStartTime = TimeInterval(sortedTasks[i + 1].date.timeIntervalSince1970)
+            
+            // Если есть промежуток между парами, добавляем перерыв
+            if nextStartTime > currentEndTime {
+                // Находим оригинальный ScheduleItem для текущей задачи
+                if let originalItem = scheduleItems.first(where: { Date(timeIntervalSince1970: $0.startTime) == sortedTasks[i].date }) {
+                    let breakTask = Task(
+                        title: "Break",
+                        fullTitle: "",
+                        caption: "",
+                        date: Date(timeIntervalSince1970: originalItem.endTime),
+                        tint: .gray,
+                        isCompleted: false,
+                        auditory: "",
+                        type: "Перерва",
+                        teacher: "",
+                        subTasks: []
+                    )
+                    tasksWithBreaks.append(breakTask)
+                }
             }
         }
     }
     
-    return tasks
+    return tasksWithBreaks
 }
+
 func processScheduleTeacherData(scheduleItems: [TeacherAPI]) -> [Task] {
+    let groupedItems = Dictionary(grouping: scheduleItems) { item in
+        return "\(item.startTime)_\(item.subject.id)"
+    }
     var tasks: [Task] = []
     
-    for (index, item) in scheduleItems.enumerated() {
-        let taskTitle = item.subject.brief
-        let taskFullTitle = item.subject.title
-        let taskDate = Date(timeIntervalSince1970: item.startTime)
+    for (_, items) in groupedItems {
+        let sortedItems = items.sorted { $0.startTime < $1.startTime }
+        let firstItem = sortedItems[0]
         
-        // Створюємо caption
-        let taskCaption = "\(item.auditory)"
-        
-        // Визначаємо колір
-        let taskTint = colorForType(item.type)
-        
-        // Отримуємо імена груп
-        let groupNames = item.groups.map { $0.name }.joined(separator: ", ")
-        
-        // Створюємо завдання
-        let task = Task(
-            title: taskTitle,
-            fullTitle: taskFullTitle,
-            caption: taskCaption,
-            date: taskDate,
-            tint: taskTint,
+        if sortedItems.count > 1 && firstItem.subject.id == sortedItems[1].subject.id {
+            let taskDate = Date(timeIntervalSince1970: firstItem.startTime)
             
-            // Нові поля
-            auditory: item.auditory,
-            type: item.type,
-            teacher: groupNames // Використовуємо імена груп
-        )
-        tasks.append(task)
-        
-        // Додаємо перерву, якщо між поточною парою та наступною є час
-        if index < scheduleItems.count - 1 {
-            let nextStartTime = scheduleItems[index + 1].startTime
-            if nextStartTime > item.endTime {
-                let breakTask = Task(
-                    title: "Break",
-                    fullTitle: "",
-                    caption: "",
-                    date: Date(timeIntervalSince1970: item.endTime),
-                    tint: .gray,
-                    
-                    // Для перерви можна встановити заглушки
-                    auditory: "",
-                    type: "Перерва",
-                    teacher: ""
+            var task = Task(
+                title: firstItem.subject.brief,
+                fullTitle: firstItem.subject.title,
+                caption: firstItem.auditory,
+                date: taskDate,
+                tint: colorForType(firstItem.type),
+                isCompleted: false,
+                auditory: firstItem.auditory,
+                type: firstItem.type,
+                teacher: firstItem.groups.map { $0.name }.joined(separator: ", "),
+                subTasks: []
+            )
+            
+            task.subTasks = sortedItems.map { item in
+                SubTask(
+                    title: item.subject.brief,
+                    fullTitle: item.subject.title,
+                    caption: item.auditory,
+                    group: item.groups.map { $0.name }.joined(separator: ", "),
+                    auditory: item.auditory,
+                    type: item.type,
+                    teacher: item.groups.map { $0.name }.joined(separator: ", ")
                 )
-                tasks.append(breakTask)
+            }
+            
+            tasks.append(task)
+        } else {
+            let taskDate = Date(timeIntervalSince1970: firstItem.startTime)
+            
+            let task = Task(
+                title: firstItem.subject.brief,
+                fullTitle: firstItem.subject.title,
+                caption: firstItem.auditory,
+                date: taskDate,
+                tint: colorForType(firstItem.type),
+                isCompleted: false,
+                auditory: firstItem.auditory,
+                type: firstItem.type,
+                teacher: firstItem.groups.map { $0.name }.joined(separator: ", "),
+                subTasks: []
+            )
+            
+            tasks.append(task)
+        }
+    }
+    
+    let sortedTasks = tasks.sorted { $0.date < $1.date }
+    var tasksWithBreaks: [Task] = []
+    
+    for i in 0..<sortedTasks.count {
+        tasksWithBreaks.append(sortedTasks[i])
+        
+        if i < sortedTasks.count - 1 {
+            let currentEndTime = TimeInterval(sortedTasks[i].date.timeIntervalSince1970)
+            let nextStartTime = TimeInterval(sortedTasks[i + 1].date.timeIntervalSince1970)
+            
+            if nextStartTime > currentEndTime {
+                // Находим оригинальный TeacherAPI для текущей задачи
+                if let originalItem = scheduleItems.first(where: { Date(timeIntervalSince1970: $0.startTime) == sortedTasks[i].date }) {
+                    let breakTask = Task(
+                        title: "Break",
+                        fullTitle: "",
+                        caption: "",
+                        date: Date(timeIntervalSince1970: originalItem.endTime),
+                        tint: .gray,
+                        isCompleted: false,
+                        auditory: "",
+                        type: "Перерва",
+                        teacher: "",
+                        subTasks: []
+                    )
+                    tasksWithBreaks.append(breakTask)
+                }
             }
         }
     }
     
-    return tasks
+    return tasksWithBreaks
 }
 
 func createDate(hour: Int, minute: Int, timeZone: String) -> Date {
