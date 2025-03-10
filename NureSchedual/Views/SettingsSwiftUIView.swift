@@ -218,7 +218,7 @@ struct SettingsSwiftUIView: View {
                         // Секция уведомлений
                         
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Сповіщення (BETA)")
+                            Text("Сповіщення")
                                 .font(.custom("Inter", size: 20).weight(.bold))
                                 .foregroundColor(.white)
                                 .padding(.top).offset(y:-10)
