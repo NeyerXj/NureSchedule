@@ -126,6 +126,7 @@ struct SettingsSwiftUIView: View {
     @AppStorage("isScheduleChangesNotificationsEnabled") private var isScheduleChangesNotificationsEnabled: Bool = true
     @AppStorage("isLessonStartNotificationsEnabled") private var isLessonStartNotificationsEnabled: Bool = true
     @AppStorage("isNotificationsEnabled") private var isNotificationsEnabled: Bool = true
+    @State private var showAboutView: Bool = false
     private var selectedDate: Binding<Date> {
             Binding(
                 get: { Date(timeIntervalSince1970: progressEndDate) },
@@ -223,20 +224,17 @@ struct SettingsSwiftUIView: View {
                                 .foregroundColor(.white)
                                 .padding(.top).offset(y:-10)
                             
-//                            Toggle(isOn: $isNotificationsEnabled) {
-//                                VStack(alignment: .leading) {
-//                                    Text("Зміни у розкладі")
-//                                        .font(.custom("Inter", size: 17).weight(.semibold))
-//                                        .foregroundColor(.white)
-//                                    Text("Сповіщення про зміни аудиторій та скасування пар")
-//                                        .font(.custom("Inter", size: 14))
-//                                        .foregroundColor(.gray)
-//                                }
-//                            }
-//                            .toggleStyle(CustomToggleStyle())
-//                            
-//                            Divider()
-//                                .background(Color.white.opacity(0.3))
+                            Toggle(isOn: $isScheduleChangesNotificationsEnabled) {
+                                VStack(alignment: .leading) {
+                                    Text("Зміни у розкладі")
+                                        .font(.custom("Inter", size: 17).weight(.semibold))
+                                        .foregroundColor(.white)
+                                    Text("Сповіщення про зміни аудиторій та скасування пар")
+                                        .font(.custom("Inter", size: 14))
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                            .toggleStyle(CustomToggleStyle())
                             
                             Toggle(isOn: $isLessonStartNotificationsEnabled) {
                                 VStack(alignment: .leading) {
@@ -304,9 +302,7 @@ struct SettingsSwiftUIView: View {
                             .padding(.horizontal)
                         }
 
-                        // Добавьте в секцию "Інше"
-                    
-
+                        
                     }
                     
                     Spacer()
@@ -365,7 +361,30 @@ struct SettingsSwiftUIView: View {
                             .shadow(color: Color.red.opacity(0.3), radius: 4, x: 0, y: 2)
                             .foregroundColor(.white)
                         }
-
+                        Button(action: {
+                            withAnimation {
+                                showAboutView = true
+                            }
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "info.circle.fill")
+                                    .font(.system(size: 16, weight: .medium))
+                                Text("Про додаток")
+                                    .font(.custom("Inter", size: 16).weight(.medium))
+                            }
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.blue.opacity(0.6)]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .cornerRadius(12)
+                            .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
+                            .foregroundColor(.white)
+                        }
                         // ❌ Кнопка закрытия
                         Button(action: {
                             presentationMode.wrappedValue.dismiss()
@@ -390,6 +409,8 @@ struct SettingsSwiftUIView: View {
                             .foregroundColor(.white)
                         }
 
+                        
+
                     }
                     .padding(.horizontal, 20)
                 
@@ -408,6 +429,78 @@ struct SettingsSwiftUIView: View {
                                         .shadow(radius: 10)
                                         .transition(.scale)
                                 }
+                // В ZStack добавляем модальное окно с информацией о приложении
+                if showAboutView {
+                    Color.black.opacity(0.001)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation {
+                                showAboutView = false
+                            }
+                        }.transition(.opacity)
+                    
+                    VStack(spacing: 16) {
+                        Text("Про додаток")
+                            .font(.custom("Inter", size: 24).weight(.bold))
+                            .foregroundColor(.white)
+                            .padding(.top, 20)
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("NureSchedule v1.0")
+                                .font(.custom("Inter", size: 18).weight(.semibold))
+                                .foregroundColor(.white)
+                            
+                            Text("Розроблено Костянтином Волковим")
+                                .font(.custom("Inter", size: 16))
+                                .foregroundColor(.white.opacity(0.8))
+                            
+                            Divider()
+                                .background(Color.white.opacity(0.3))
+                                .padding(.vertical, 8)
+                            
+                            Text("Це неофіційний додаток для перегляду розкладу ХНУРЕ. Додаток використовує відкриті API університету для отримання даних розкладу.")
+                                .font(.custom("Inter", size: 16))
+                                .foregroundColor(.white.opacity(0.8))
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                            
+                            Text("© 2025 Всі права захищені")
+                                .font(.custom("Inter", size: 14))
+                                .foregroundColor(.white.opacity(0.6))
+                                .padding(.top, 8)
+                        }
+                        .padding(.horizontal, 20)
+                        
+                        Button(action: {
+                            withAnimation {
+                                showAboutView = false
+                            }
+                        }) {
+                            Text("Закрити")
+                                .font(.custom("Inter", size: 16).weight(.medium))
+                                .foregroundColor(.white)
+                                .padding(.vertical, 12)
+                                .frame(maxWidth: .infinity)
+                                .background(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.purple.opacity(0.6)]),
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .cornerRadius(12)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
+                    }
+                    .frame(width: 320)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color(red: 0.15, green: 0.20, blue: 0.35))
+                    )
+                    .shadow(color: Color.black.opacity(0.5), radius: 15)
+                    .transition(.scale)
+                }
             }
             
             .navigationBarBackButtonHidden(true)
