@@ -121,7 +121,6 @@ struct SettingsSwiftUIView: View {
     @AppStorage("isProgessBar") private var isProgessBar: Bool = false
     @AppStorage("isGestrue") private var isGestrue: Bool = true
     @State private var showClearCahceView: Bool = false
-    @State private var isDebugingNotif: Bool = false
     @StateObject private var networkMonitor = NetworkMonitor()
     @AppStorage("isScheduleChangesNotificationsEnabled") private var isScheduleChangesNotificationsEnabled: Bool = true
     @AppStorage("isLessonStartNotificationsEnabled") private var isLessonStartNotificationsEnabled: Bool = true
@@ -188,18 +187,6 @@ struct SettingsSwiftUIView: View {
                                 Divider()
                                     .background(Color.white.opacity(0.3))
                             }
-                                
-                            
-                            // Раздел "Сповіщення"
-//                            Toggle(isOn: $areNotificationsEnabled) {
-//                                Text("Включити сповіщення")
-//                                    .font(.custom("Inter", size: 17).weight(.semibold))
-//                                    .foregroundColor(.white)
-//                            }
-//                            .toggleStyle(CustomToggleStyle())
-//                            
-//                            Divider()
-//                                .background(Color.white.opacity(0.3))
                             
                             Toggle(isOn: $isGestrue) {
                                 Text("Зміна днів свайпом")
@@ -254,55 +241,7 @@ struct SettingsSwiftUIView: View {
                                 .fill(Color.black.opacity(0.2))
                         )
                         .padding()
-                        
-                        // Новые кнопки: переход на очистку кеша и связь с поддержкой
-                        
-                        if isDebugingNotif{
-                            Button(action: {
-    //                            NotificationManager.shared.scheduleTestNotification()
-    //                            NotificationManager.shared.scheduleTestLessonNotification()
-                                UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
-                            }) {
-                                HStack {
-                                    Image(systemName: "bell.badge")
-                                        .foregroundColor(.blue)
-                                    Text("Удалить")
-                                        .foregroundColor(.primary)
-                                }
-                                .padding()
-                                .background(Color.secondary.opacity(0.2))
-                                .cornerRadius(10)
-                            }
-                            .padding(.horizontal)
-
-                            Button(action: {
-                                UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
-                                    print("\n📋 Активные уведомления (\(requests.count)):")
-                                    for request in requests {
-                                        print("🔔 ID: \(request.identifier)")
-                                        print("📝 Заголовок: \(request.content.title)")
-                                        print("Name: \(request.content.body)")
-                                        if let trigger = request.trigger as? UNCalendarNotificationTrigger {
-                                            print("⏰ Дата: \(trigger.dateComponents)")
-                                        }
-                                        print("---")
-                                    }
-                                }
-                            }) {
-                                HStack {
-                                    Image(systemName: "list.bullet")
-                                        .foregroundColor(.green)
-                                    Text("Показати активні повідомлення")
-                                        .foregroundColor(.primary)
-                                }
-                                .padding()
-                                .background(Color.secondary.opacity(0.2))
-                                .cornerRadius(10)
-                            }
-                            .padding(.horizontal)
-                        }
-
-                        
+                                                
                     }
                     
                     Spacer()
