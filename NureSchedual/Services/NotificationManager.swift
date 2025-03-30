@@ -25,25 +25,47 @@ class NotificationManager {
         case teacher
     }
     
+    // Добавим перечисление для логирования
+    private enum LogLevel {
+        case info, warning, error, success
+        
+        var prefix: String {
+            switch self {
+            case .info: return "🔄"
+            case .warning: return "⚠️"
+            case .error: return "❌"
+            case .success: return "✅"
+            }
+        }
+    }
+    
     private init() {
         // Запрашиваем разрешения при инициализации
         requestNotificationPermissions()
     }
     
+    // Добавим метод для логирования
+    private func log(_ message: String, level: LogLevel = .info) {
+        #if DEBUG
+        print("\(level.prefix) \(message)")
+        #endif
+    }
+    
+    // Обновим метод requestNotificationPermissions
     private func requestNotificationPermissions() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
             if granted {
-                print("✅ Разрешения на уведомления получены")
+                self.log("Разрешения на уведомления получены", level: .success)
             } else {
-                print("❌ Разрешения на уведомления отклонены")
+                self.log("Разрешения на уведомления отклонены", level: .error)
                 if let error = error {
-                    print("❌ Ошибка: \(error.localizedDescription)")
+                    self.log("Ошибка: \(error.localizedDescription)", level: .error)
                 }
             }
         }
     }
     
-    // Планирование уведомления о начале пар
+    // Улучшим метод scheduleLessonNotification
     func scheduleLessonNotification(for task: Task) {
         guard task.title != "Break" else { return }
         
@@ -54,18 +76,10 @@ class NotificationManager {
         
         // Финальная проверка даты
         guard task.date > currentDate && task.date < endDate else {
-//            print("⚠️ Пропуск уведомления - дата вне периода 7 дней: \(formatDateTime(task.date))")
             return
         }
         
-        let content = UNMutableNotificationContent()
-        content.title = "🎓 Скоро початок пари"
-        content.body = """
-            📚 \(task.title)
-            🏛 Аудиторія: \(task.auditory)
-            ⏰ Початок: \(formatTime(task.date))
-            """
-        content.sound = .default
+        let content = createLessonNotificationContent(for: task)
         
         // Время уведомления - за 10 минут до начала
         let notificationTime = calendar.date(byAdding: .minute, value: -10, to: task.date) ?? task.date
@@ -79,14 +93,29 @@ class NotificationManager {
             trigger: trigger
         )
         
-        UNUserNotificationCenter.current().add(request) { error in
+        UNUserNotificationCenter.current().add(request) { [weak self] error in
+            guard let self = self else { return }
             if let error = error {
-                print("❌ Ошибка планирования уведомления: \(error.localizedDescription)")
+                self.log("Ошибка планирования уведомления: \(error.localizedDescription)", level: .error)
             } else {
-                print(currentDate)
-                print("✅ Уведомление запланировано на \(self.formatDateTime(notificationTime))")
+                self.log("Уведомление запланировано на \(self.formatDateTime(notificationTime))", level: .success)
             }
         }
+    }
+    
+    // Добавим вспомогательный метод для создания контента уведомления
+    private func createLessonNotificationContent(for task: Task) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.title = "�� Скоро початок пари"
+        content.body = """
+            📚 \(task.title)
+            🏛 Аудиторія: \(task.auditory)
+            ⏰ Початок: \(formatTime(task.date))
+            """
+        content.sound = .default
+        content.threadIdentifier = "lessons"
+        content.interruptionLevel = .timeSensitive
+        return content
     }
     
     // Уведомление об изменениях в расписании
@@ -248,7 +277,7 @@ class NotificationManager {
         let content = UNMutableNotificationContent()
         content.title = "🎓 Скоро початок пари"
         content.body = """
-            �� \(testTask.title)
+            📚 \(testTask.title)
             🏛 Аудиторія: \(testTask.auditory)
             ⏰ Початок: \(formatTime(testTask.date))
             """
@@ -310,11 +339,11 @@ class NotificationManager {
         return false
     }
     
-    // Обновляем метод fetchAndProcessSchedule
+    // Улучшим метод fetchAndProcessSchedule
     private func fetchAndProcessSchedule(from url: URL) {
         // Проверяем, не выполняется ли уже загрузка
         guard !isLoadingNotifications else {
-            print("🔄 Загрузка уведомлений уже выполняется")
+            log("Загрузка уведомлений уже выполняется", level: .warning)
             return
         }
         
@@ -324,16 +353,16 @@ class NotificationManager {
             guard let self = self else { return }
             defer { 
                 self.isLoadingNotifications = false
-                print("✅ Загрузка уведомлений завершена")
+                self.log("Загрузка уведомлений завершена", level: .success)
             }
             
             if let error = error {
-                print("❌ Ошибка загрузки расписания: \(error.localizedDescription)")
+                self.log("Ошибка загрузки расписания: \(error.localizedDescription)", level: .error)
                 return
             }
             
             guard let data = data else {
-                print("❌ Нет данных расписания")
+                self.log("Нет данных расписания", level: .error)
                 return
             }
             
@@ -345,20 +374,19 @@ class NotificationManager {
                 
                 // Проверяем, что получили данные
                 guard !scheduleItems.isEmpty else {
-                    print("⚠️ Получено пустое расписание")
+                    self.log("Получено пустое расписание", level: .warning)
                     return
                 }
                 
-                print("🔄 Вызов processScheduleData")
+                self.log("Обработка данных расписания", level: .info)
                 let tasks = self.processScheduleData(scheduleItems: scheduleItems)
                 
                 if self.shouldUpdateNotifications(for: tasks) {
-                    print("🔄 Вызов updateNotificationsForTasks")
+                    self.log("Обновление уведомлений для задач", level: .info)
                     self.updateNotificationsForTasks(tasks)
                 }
             } catch {
-                print("❌ Ошибка обработки расписания: \(error.localizedDescription)")
-                print("Детали ошибки: \(error)")
+                self.log("Ошибка обработки расписания: \(error.localizedDescription)", level: .error)
             }
         }.resume()
     }

@@ -211,17 +211,7 @@ struct SettingsSwiftUIView: View {
                                 .foregroundColor(.white)
                                 .padding(.top).offset(y:-10)
                             
-                            Toggle(isOn: $isScheduleChangesNotificationsEnabled) {
-                                VStack(alignment: .leading) {
-                                    Text("Зміни у розкладі")
-                                        .font(.custom("Inter", size: 17).weight(.semibold))
-                                        .foregroundColor(.white)
-                                    Text("Сповіщення про зміни аудиторій та скасування пар")
-                                        .font(.custom("Inter", size: 14))
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            .toggleStyle(CustomToggleStyle())
+                    
                             
                             Toggle(isOn: $isLessonStartNotificationsEnabled) {
                                 VStack(alignment: .leading) {
@@ -385,7 +375,7 @@ struct SettingsSwiftUIView: View {
                             .padding(.top, 20)
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("NureSchedule v1.0")
+                            Text("NureSchedule v1.1")
                                 .font(.custom("Inter", size: 18).weight(.semibold))
                                 .foregroundColor(.white)
                             
