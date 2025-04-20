@@ -120,7 +120,9 @@ struct SettingsSwiftUIView: View {
     @AppStorage("areNotificationsEnabled") private var areNotificationsEnabled: Bool = true
     @AppStorage("isProgessBar") private var isProgessBar: Bool = false
     @AppStorage("isGestrue") private var isGestrue: Bool = true
+    @AppStorage("isShowSubjectStatistics") private var isShowSubjectStatistics: Bool = false
     @State private var showClearCahceView: Bool = false
+    @State private var showSemesterSettings = false
     @StateObject private var networkMonitor = NetworkMonitor()
     @AppStorage("isScheduleChangesNotificationsEnabled") private var isScheduleChangesNotificationsEnabled: Bool = true
     @AppStorage("isLessonStartNotificationsEnabled") private var isLessonStartNotificationsEnabled: Bool = true
@@ -195,6 +197,31 @@ struct SettingsSwiftUIView: View {
                             }
                             .toggleStyle(CustomToggleStyle())
                             
+                            Divider()
+                                .background(Color.white.opacity(0.3))
+                            
+                            Button(action: {
+                                showSemesterSettings = true
+                            }) {
+                                HStack {
+                                    Text("Налаштування семестрів")
+                                        .font(.custom("Inter", size: 16).weight(.semibold))
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.white.opacity(0.7))
+                                }
+                            }
+                            .sheet(isPresented: $showSemesterSettings) {
+                                SemesterSettingsView()
+                            }
+                            
+                            Toggle(isOn: $isShowSubjectStatistics) {
+                                Text("Статистика предметів")
+                                    .font(.custom("Inter", size: 16).weight(.semibold))
+                                    .foregroundColor(.white)
+                            }
+                            .toggleStyle(CustomToggleStyle())
                         }
                         .padding()
                         .background(

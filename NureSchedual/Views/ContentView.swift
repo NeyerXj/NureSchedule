@@ -202,6 +202,9 @@ struct RotatingLoaderView: View {
 
 // MARK: - ContentView
 struct ContentView: View {
+    @AppStorage("isShowSubjectStatistics") private var isShowSubjectStatistics: Bool = false
+    @State private var showingStatistics = false
+
     var academicProgress: Double {
         let calendar = Calendar.current
         let today = Date()
@@ -301,6 +304,10 @@ struct ContentView: View {
     // Обновите состояния в начале ContentView
     @State private var isShowingOnboarding = !UserDefaults.standard.bool(forKey: "hasSeenOnboarding")
     @State private var isShowingFeatureTour = !UserDefaults.standard.bool(forKey: "hasSeenFeatureTour")
+
+    @State private var cachedStatistics: [SubjectStatistics]? = nil
+    @State private var lastScheduleHash: String = ""
+    @State private var hasLoadedInitialStatistics = false
 
     var body: some View {
         NavigationStack {
@@ -477,6 +484,28 @@ struct ContentView: View {
                         }
                         .padding(.leading, 0)
                         .accessibilityLabel("Розклад")
+
+                        if isShowSubjectStatistics {
+                            NavigationLink(isActive: $showingStatistics) {
+                                if let statistics = cachedStatistics {
+                                    SubjectStatisticsView(statistics: statistics)
+                                }
+                            } label: {
+                                VStack {
+                                    Image(systemName: "chart.bar.fill")
+                                        .resizable()
+                                        .frame(width: 24, height: 24)
+                                        .foregroundColor(.black)
+                                        .padding(11)
+                                        .background(Color(red: 0.46, green: 0.61, blue: 0.95))
+                                        .clipShape(Circle())
+                                        .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
+                                }
+                            }
+                            .padding(.leading, 5)
+                            .accessibilityLabel("Статистика")
+                        }
+
                         NavigationLink {
                             ZStack {
                                 SettingsSwiftUIView()
@@ -630,6 +659,12 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowFeatureTour"))) { _ in
                 isShowingFeatureTour = true
             }
+        }
+        .onChange(of: tasks) { _ in
+            updateStatistics()
+        }
+        .onAppear {
+            updateStatistics()
         }
     }
     
@@ -1391,6 +1426,25 @@ struct ContentView: View {
     private func performHapticFeedback() {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
+    }
+
+    private func calculateScheduleHash() -> String {
+        return tasks.map { task in
+            "\(task.title)_\(task.date.timeIntervalSince1970)_\(task.type)_\(task.auditory)"
+        }.sorted().joined()
+    }
+    
+    private func updateStatistics() {
+        // Проверяем, загружена ли начальная статистика
+        guard !hasLoadedInitialStatistics else { return }
+        
+        let newHash = calculateScheduleHash()
+        if newHash != lastScheduleHash {
+            print("📊 Загрузка начальной статистики")
+            cachedStatistics = SubjectStatistics.calculateStatistics(from: tasks)
+            lastScheduleHash = newHash
+            hasLoadedInitialStatistics = true
+        }
     }
 }
 
