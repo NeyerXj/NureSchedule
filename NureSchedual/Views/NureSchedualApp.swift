@@ -194,10 +194,11 @@ extension Notification.Name {
 @main
 struct NureSchedualApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @StateObject private var promotionalManager = PromotionalManager.shared
+    @AppStorage("hasSeenFeatureTour") private var hasSeenFeatureTour = false
+    @State private var showFeatureTour = false
+    @State private var showOnboarding = false
     
-    // Состояние для отображения индикатора загрузки
-    @State private var showLoading = true
-
     init() {
         // Принудительная установка украинского языка
         UserDefaults.standard.set(["uk"], forKey: "AppleLanguages")
@@ -234,8 +235,41 @@ struct NureSchedualApp: App {
                 NavigationStack {
                     ContentView()
                 }
+                
+                // Показываем туториал для новых пользователей
+                if !hasSeenFeatureTour {
+                    FeatureTourView(isShowingTour: $showFeatureTour)
+                        .onChange(of: showFeatureTour) { newValue in
+                            if !newValue {
+                                hasSeenFeatureTour = true
+                                showOnboarding = true
+                            }
+                        }
+                }
+                
+                // Показываем онбординг после туториала
+                if showOnboarding {
+                    OnboardingOverlayView(isShowingOnboarding: $showOnboarding, onComplete: {
+                        promotionalManager.checkAndShowPromos()
+                    })
+                }
+                
+                // Показываем промо статистики
+                if promotionalManager.shouldShowStatisticsPromo {
+                    StatisticsPromotionView(isPresented: $promotionalManager.shouldShowStatisticsPromo)
+                }
+                
+                // Показываем промо Telegram
+                if promotionalManager.shouldShowTelegramPromo {
+                    TelegramPromotionView(isPresented: $promotionalManager.shouldShowTelegramPromo)
+                }
             }
             .onAppear {
+                if hasSeenFeatureTour {
+                    promotionalManager.checkAndShowPromos()
+                } else {
+                    showFeatureTour = true
+                }
             }
         }
     }
