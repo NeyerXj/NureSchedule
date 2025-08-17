@@ -111,8 +111,10 @@ struct CustomDateSelector: View {
 
 struct SettingsSwiftUIView: View {
     @Environment(\.presentationMode) var presentationMode
+    @State private var showSemesterSettings = false
 
     // Используем @AppStorage для сохранения настроек
+    @AppStorage("isShowSubjectStatistics") private var isShowSubjectStatistics: Bool = false
     @Namespace private var animation
     @AppStorage("progressEndDate") private var progressEndDate: Double = Date().timeIntervalSince1970
     @AppStorage("isTeacherMode") private var isTeacherMode: Bool = false
@@ -126,6 +128,8 @@ struct SettingsSwiftUIView: View {
     @AppStorage("isScheduleChangesNotificationsEnabled") private var isScheduleChangesNotificationsEnabled: Bool = true
     @AppStorage("isLessonStartNotificationsEnabled") private var isLessonStartNotificationsEnabled: Bool = true
     @AppStorage("isNotificationsEnabled") private var isNotificationsEnabled: Bool = true
+    @State private var showAboutView: Bool = false
+    
     private var selectedDate: Binding<Date> {
             Binding(
                 get: { Date(timeIntervalSince1970: progressEndDate) },
@@ -206,6 +210,31 @@ struct SettingsSwiftUIView: View {
                                     .foregroundColor(.white)
                             }
                             .toggleStyle(CustomToggleStyle())
+                            Divider()
+                                .background(Color.white.opacity(0.3))
+                            
+                            Button(action: {
+                                showSemesterSettings = true
+                            }) {
+                                HStack {
+                                    Text("Налаштування семестрів")
+                                        .font(.custom("Inter", size: 16).weight(.semibold))
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.white.opacity(0.7))
+                                }
+                            }
+                            .sheet(isPresented: $showSemesterSettings) {
+                                SemesterSettingsView()
+                            }
+                            
+                            Toggle(isOn: $isShowSubjectStatistics) {
+                                Text("Статистика предметів")
+                                    .font(.custom("Inter", size: 16).weight(.semibold))
+                                    .foregroundColor(.white)
+                            }
+                            .toggleStyle(CustomToggleStyle())
                             
                         }
                         .padding()
@@ -218,7 +247,7 @@ struct SettingsSwiftUIView: View {
                         // Секция уведомлений
                         
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Сповіщення (BETA)")
+                            Text("Сповіщення")
                                 .font(.custom("Inter", size: 20).weight(.bold))
                                 .foregroundColor(.white)
                                 .padding(.top).offset(y:-10)
@@ -365,7 +394,30 @@ struct SettingsSwiftUIView: View {
                             .shadow(color: Color.red.opacity(0.3), radius: 4, x: 0, y: 2)
                             .foregroundColor(.white)
                         }
-
+                        Button(action: {
+                            withAnimation {
+                                showAboutView = true
+                            }
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "info.circle.fill")
+                                    .font(.system(size: 16, weight: .medium))
+                                Text("Про додаток")
+                                    .font(.custom("Inter", size: 16).weight(.medium))
+                            }
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.blue.opacity(0.6)]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .cornerRadius(12)
+                            .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
+                            .foregroundColor(.white)
+                        }
                         // ❌ Кнопка закрытия
                         Button(action: {
                             presentationMode.wrappedValue.dismiss()
@@ -408,6 +460,77 @@ struct SettingsSwiftUIView: View {
                                         .shadow(radius: 10)
                                         .transition(.scale)
                                 }
+                if showAboutView {
+                    Color.black.opacity(0.001)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation {
+                                showAboutView = false
+                            }
+                        }.transition(.opacity)
+                    
+                    VStack(spacing: 16) {
+                        Text("Про додаток")
+                            .font(.custom("Inter", size: 24).weight(.bold))
+                            .foregroundColor(.white)
+                            .padding(.top, 20)
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("NureSchedule v1.2")
+                                .font(.custom("Inter", size: 18).weight(.semibold))
+                                .foregroundColor(.white)
+                            
+                            Text("Розроблено Костянтином Волковим")
+                                .font(.custom("Inter", size: 16))
+                                .foregroundColor(.white.opacity(0.8))
+                            
+                            Divider()
+                                .background(Color.white.opacity(0.3))
+                                .padding(.vertical, 8)
+                            
+                            Text("Це неофіційний додаток для перегляду розкладу ХНУРЕ. Додаток використовує відкриті API університету(та Mindenit) для отримання даних розкладу.")
+                                .font(.custom("Inter", size: 16))
+                                .foregroundColor(.white.opacity(0.8))
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                            
+                            Text("© 2025 Всі права захищені")
+                                .font(.custom("Inter", size: 14))
+                                .foregroundColor(.white.opacity(0.6))
+                                .padding(.top, 8)
+                        }
+                        .padding(.horizontal, 20)
+                        
+                        Button(action: {
+                            withAnimation {
+                                showAboutView = false
+                            }
+                        }) {
+                            Text("Закрити")
+                                .font(.custom("Inter", size: 16).weight(.medium))
+                                .foregroundColor(.white)
+                                .padding(.vertical, 12)
+                                .frame(maxWidth: .infinity)
+                                .background(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.purple.opacity(0.6)]),
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .cornerRadius(12)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
+                    }
+                    .frame(width: 320)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color(red: 0.15, green: 0.20, blue: 0.35))
+                    )
+                    .shadow(color: Color.black.opacity(0.5), radius: 15)
+                    .transition(.scale)
+                }
             }
             
             .navigationBarBackButtonHidden(true)

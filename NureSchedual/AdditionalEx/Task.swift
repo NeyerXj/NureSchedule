@@ -16,6 +16,24 @@ struct ScheduleItem: Identifiable, Decodable {
         let id: Int
         let title: String
         let brief: String
+        
+        enum CodingKeys: String, CodingKey { case id, title, name, brief }
+        
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(Int.self, forKey: .id)
+            brief = try c.decodeIfPresent(String.self, forKey: .brief) ?? ""
+            if let t = try c.decodeIfPresent(String.self, forKey: .title) {
+                title = t
+            } else if let n = try c.decodeIfPresent(String.self, forKey: .name) {
+                title = n
+            } else {
+                throw DecodingError.keyNotFound(
+                    CodingKeys.title,
+                    .init(codingPath: decoder.codingPath, debugDescription: "Neither `title` nor `name` found in subject")
+                )
+            }
+        }
     }
 
     struct Teacher: Decodable {
@@ -28,33 +46,121 @@ struct ScheduleItem: Identifiable, Decodable {
         let id: Int
         let name: String
     }
+
+    private struct AuditoriumRef: Decodable {
+        let id: Int?
+        let name: String?
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case numberPair
+        case subject
+        case startTime
+        case endTime
+        case auditory       // legacy: string
+        case auditorium     // new: object { id, name }
+        case type
+        case teachers
+        case groups
+    }
+    
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(Int.self, forKey: .id)
+        numberPair = try c.decode(Int.self, forKey: .numberPair)
+        subject = try c.decode(Subject.self, forKey: .subject)
+        startTime = try c.decode(TimeInterval.self, forKey: .startTime)
+        endTime = try c.decode(TimeInterval.self, forKey: .endTime)
+        type = try c.decode(String.self, forKey: .type)
+        teachers = try c.decode([Teacher].self, forKey: .teachers)
+        groups = try c.decode([Group].self, forKey: .groups)
+        
+        if let audString = try c.decodeIfPresent(String.self, forKey: .auditory) {
+            auditory = audString
+        } else if let audObj = try c.decodeIfPresent(AuditoriumRef.self, forKey: .auditorium),
+                  let name = audObj.name {
+            auditory = name
+        } else {
+            auditory = ""
+        }
+    }
 }
 
 struct TeacherAPI: Identifiable, Decodable {
     let id: Int?
-    let name: String? // Зроблено опціональним, якщо поле `name` не завжди присутнє
+    let name: String?
     let startTime: TimeInterval
     let endTime: TimeInterval
     let auditory: String
     let type: String
     let subject: Subject
-    let groups: [Group] // Змінено з `Groups` на масив `[Group]`
+    let groups: [Group]
+    
+    private struct AuditoriumRef: Decodable {
+        let id: Int?
+        let name: String?
+    }
     
     struct Subject: Decodable {
         let id: Int
         let title: String
-        let brief: String // Виправлено з `breif` на `brief`
+        let brief: String
         
-        enum CodingKeys: String, CodingKey {
-            case id
-            case title
-            case brief = "brief" // Мапінг, якщо JSON використовує `brief`
+        enum CodingKeys: String, CodingKey { case id, title, name, brief }
+        
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(Int.self, forKey: .id)
+            brief = try c.decodeIfPresent(String.self, forKey: .brief) ?? ""
+            if let t = try c.decodeIfPresent(String.self, forKey: .title) {
+                title = t
+            } else if let n = try c.decodeIfPresent(String.self, forKey: .name) {
+                title = n
+            } else {
+                throw DecodingError.keyNotFound(
+                    CodingKeys.title,
+                    .init(codingPath: decoder.codingPath, debugDescription: "Neither `title` nor `name` found in subject")
+                )
+            }
         }
     }
     
     struct Group: Decodable {
         let id: Int
         let name: String
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case startTime
+        case endTime
+        case auditory       // legacy
+        case auditorium     // new: object { id, name }
+        case type
+        case subject
+        case groups
+    }
+    
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(Int.self, forKey: .id)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        startTime = try c.decode(TimeInterval.self, forKey: .startTime)
+        endTime = try c.decode(TimeInterval.self, forKey: .endTime)
+        type = try c.decode(String.self, forKey: .type)
+        subject = try c.decode(Subject.self, forKey: .subject)
+        groups = try c.decode([Group].self, forKey: .groups)
+        
+        if let audString = try c.decodeIfPresent(String.self, forKey: .auditory) {
+            auditory = audString
+        } else if let audObj = try c.decodeIfPresent(AuditoriumRef.self, forKey: .auditorium),
+                  let name = audObj.name {
+            auditory = name
+        } else {
+            auditory = ""
+        }
     }
 }
 

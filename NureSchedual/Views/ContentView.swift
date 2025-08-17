@@ -3,6 +3,13 @@ import AVFoundation
 import Network
 import UserNotifications
 
+struct APIResponse<T: Decodable>: Decodable {
+    let success: Bool
+    let data: T
+    let message: String?
+    let error: String?
+}
+
 // MARK: - Модель данных для групп
 struct Group: Identifiable, Decodable {
     let id: Int
@@ -182,18 +189,18 @@ struct RotatingLoaderView: View {
                 .rotationEffect(.degrees(isRotating ? 360 : 0))
                 .opacity(opacity) // Применяем прозрачность
                 .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isRotating)
-                .onAppear { 
+                .onAppear {
                     // Запускаем обе анимации при появлении
                     withAnimation(.easeIn(duration: 0.3)) {
                         opacity = 1
                     }
-                    isRotating = true 
+                    isRotating = true
                 }
-                .onDisappear { 
+                .onDisappear {
                     withAnimation(.easeOut(duration: 0.3)) {
                         opacity = 0
                     }
-                    isRotating = false 
+                    isRotating = false
                 }
         }
     }
@@ -202,6 +209,8 @@ struct RotatingLoaderView: View {
 
 // MARK: - ContentView
 struct ContentView: View {
+    @AppStorage("isShowSubjectStatistics") private var isShowSubjectStatistics: Bool = false
+    @State private var cachedStatistics: [SubjectStatistics]? = nil
     var academicProgress: Double {
         let calendar = Calendar.current
         let today = Date()
@@ -262,6 +271,9 @@ struct ContentView: View {
     @State private var isOnceLoadedNotif: Bool = false
     
     @State private var shouldCheckForNotificationNavigation = true
+    
+    @State private var lastScheduleHash: String = ""
+    @State private var hasLoadedInitialStatistics = false
 
     // Фильтрованные группы
     var filteredGroups: [Group] {
@@ -284,7 +296,7 @@ struct ContentView: View {
     @StateObject private var networkMonitor = NetworkMonitor()
 
     @State private var isInitialLoadComplete: Bool = false
-
+    @State private var showingStatistics = false
     // Добавляем новые состояния для контроля переключения режимов
     @State private var isModeSwitching: Bool = false
     @State private var pendingModeSwitch: Bool? = nil
@@ -477,6 +489,26 @@ struct ContentView: View {
                         }
                         .padding(.leading, 0)
                         .accessibilityLabel("Розклад")
+                        if isShowSubjectStatistics {
+                            NavigationLink(isActive: $showingStatistics) {
+                                if let statistics = cachedStatistics {
+                                    SubjectStatisticsView(statistics: statistics)
+                                }
+                            } label: {
+                                VStack {
+                                    Image(systemName: "chart.bar.fill")
+                                        .resizable()
+                                        .frame(width: 24, height: 24)
+                                        .foregroundColor(.black)
+                                        .padding(11)
+                                        .background(Color(red: 0.46, green: 0.61, blue: 0.95))
+                                        .clipShape(Circle())
+                                        .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
+                                }
+                            }
+                            .padding(.leading, 5)
+                            .accessibilityLabel("Статистика")
+                        }
                         NavigationLink {
                             ZStack {
                                 SettingsSwiftUIView()
@@ -553,7 +585,7 @@ struct ContentView: View {
                                 }
                             }
                             .onEnded { value in
-                                defer { 
+                                defer {
                                     swipeStartLocation = 0
                                     isSwipingDay = false
                                 }
@@ -630,6 +662,11 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowFeatureTour"))) { _ in
                 isShowingFeatureTour = true
             }
+        }.onChange(of: tasks) { _ in
+            updateStatistics()
+        }
+        .onAppear {
+            updateStatistics()
         }
     }
     
@@ -639,6 +676,24 @@ struct ContentView: View {
                 self.tasks.removeAll()
                 self.tasks = newTasks
             }
+        }
+    }
+    private func calculateScheduleHash() -> String {
+        return tasks.map { task in
+            "\(task.title)_\(task.date.timeIntervalSince1970)_\(task.type)_\(task.auditory)"
+        }.sorted().joined()
+    }
+    
+    private func updateStatistics() {
+        // Проверяем, загружена ли начальная статистика
+        guard !hasLoadedInitialStatistics else { return }
+        
+        let newHash = calculateScheduleHash()
+        if newHash != lastScheduleHash {
+            print("📊 Загрузка начальной статистики")
+            cachedStatistics = SubjectStatistics.calculateStatistics(from: tasks)
+            lastScheduleHash = newHash
+            hasLoadedInitialStatistics = true
         }
     }
     
@@ -758,7 +813,7 @@ struct ContentView: View {
     }
     
     func saveTeacher(teacher: Teacher) {
-        UserDefaults.standard.set(teacher.id, forKey: "savedTeacherId")
+        UserDefaults.standard.set(teacher.id, forKey: "savedTeachersId")
         UserDefaults.standard.set(teacher.name, forKey: "savedTeachersName")
     }
     
@@ -796,7 +851,7 @@ struct ContentView: View {
         DispatchQueue.main.async {
                 self.isFetchingSchedule = true
             }
-        guard let url = URL(string: "https://api.mindenit.org/schedule/groups/\(groupId)") else {
+        guard let url = URL(string: "https://sh.mindenit.org/api/groups/\(groupId)/schedule") else {
             print("Неверный URL")
             apiConnection = false
             DispatchQueue.main.async {
@@ -843,11 +898,26 @@ struct ContentView: View {
         }.resume()
     }
     
+    // Normalize API v2 keys to legacy model keys expected by existing models
+    private func normalizeScheduleJSONKeys(_ data: Data) -> Data {
+        guard var json = String(data: data, encoding: .utf8) else { return data }
+        // Map time fields
+        json = json.replacingOccurrences(of: "\"startedAt\":", with: "\"startTime\":")
+        json = json.replacingOccurrences(of: "\"endedAt\":", with: "\"endTime\":")
+        return json.data(using: .utf8) ?? data
+    }
+
     private func decodeAndProcessScheduleData(from data: Data, groupId: Int, completion: @escaping ([Task]) -> Void) {
         do {
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
-            let scheduleItems = try decoder.decode([ScheduleItem].self, from: data)
+            let normalized = normalizeScheduleJSONKeys(data)
+            let root = try decoder.decode(APIResponse<[ScheduleItem]>.self, from: normalized)
+            guard root.success else {
+                print("API error (group schedule): \(root.message ?? root.error ?? "Unknown error")")
+                DispatchQueue.main.async { self.isFetchingSchedule = false }
+                return
+            }
+            let scheduleItems = root.data
             let tasks = processScheduleData(scheduleItems: scheduleItems)
             DispatchQueue.main.async {
                 completion(tasks)
@@ -866,7 +936,7 @@ struct ContentView: View {
         DispatchQueue.main.async {
                 self.isFetchingSchedule = true
             }
-        guard let url = URL(string: "https://api.mindenit.org/schedule/teachers/\(teacherId)") else {
+        guard let url = URL(string: "https://sh.mindenit.org/api/teachers/\(teacherId)/schedule") else {
             print("Неверный URL")
             apiConnection = false
             DispatchQueue.main.async {
@@ -908,8 +978,14 @@ struct ContentView: View {
     private func decodeAndProcessTeacherData(from data: Data, teacherId: Int, completion: @escaping ([Task]) -> Void) {
         do {
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
-            let scheduleItems = try decoder.decode([TeacherAPI].self, from: data)
+            let normalized = normalizeScheduleJSONKeys(data)
+            let root = try decoder.decode(APIResponse<[TeacherAPI]>.self, from: normalized)
+            guard root.success else {
+                print("API error (teacher schedule): \(root.message ?? root.error ?? "Unknown error")")
+                DispatchQueue.main.async { self.isFetchingSchedule = false }
+                return
+            }
+            let scheduleItems = root.data
             let tasks = processScheduleTeacherData(scheduleItems: scheduleItems)
             DispatchQueue.main.async {
                 completion(tasks)
@@ -947,7 +1023,7 @@ struct ContentView: View {
     // MARK: - Функция для загрузки преподавателей
     func fetchTeachers() {
         DispatchQueue.main.async { self.isLoading = true }
-        guard let url = URL(string: "https://api.mindenit.org/lists/teachers") else {
+        guard let url = URL(string: "https://sh.mindenit.org/api/teachers") else {
             print("Неверный URL")
             return
         }
@@ -964,9 +1040,13 @@ struct ContentView: View {
             }
             
             do {
-                let decodedTeachers = try JSONDecoder().decode([Teacher].self, from: data)
+                let decoded = try JSONDecoder().decode(APIResponse<[Teacher]>.self, from: data)
+                guard decoded.success else {
+                    print("API error (teachers): \(decoded.message ?? decoded.error ?? "Unknown error")")
+                    return
+                }
                 DispatchQueue.main.async {
-                    self.allTeachers = decodedTeachers
+                    self.allTeachers = decoded.data
                 }
                 print("Успешная загрузка преподавателей")
             } catch {
@@ -987,7 +1067,7 @@ struct ContentView: View {
     // MARK: - Функция для загрузки групп с API
     func fetchGroups() {
         DispatchQueue.main.async { self.isLoading = true }
-        guard let url = URL(string: "https://api.mindenit.org/lists/groups") else { return }
+        guard let url = URL(string: "https://sh.mindenit.org/api/groups") else { return }
         
         URLSession.shared.dataTask(with: url) { data, response, error in
             defer { DispatchQueue.main.async { self.isLoading = false } }
@@ -997,9 +1077,13 @@ struct ContentView: View {
             }
             guard let data = data else { return }
             do {
-                let decodedGroups = try JSONDecoder().decode([Group].self, from: data)
+                let decoded = try JSONDecoder().decode(APIResponse<[Group]>.self, from: data)
+                guard decoded.success else {
+                    print("API error (groups): \(decoded.message ?? decoded.error ?? "Unknown error")")
+                    return
+                }
                 DispatchQueue.main.async {
-                    self.allGroups = decodedGroups
+                    self.allGroups = decoded.data
                 }
             } catch {
                 print("Ошибка декодирования данных групп: \(error)")
@@ -1404,27 +1488,31 @@ private extension ContentView {
     func fetchScheduleWithCache(forGroupId groupId: Int, completion: @escaping ([Task]) -> Void) {
         // Очищаем старые уведомления перед загрузкой нового расписания
         NotificationManager.shared.cancelAllNotifications()
-        
+
         // Проверяем наличие кэша и его актуальность
         if let cachedData = CacheManager.load(filename: "schedule_group_\(groupId).json"),
            let cacheDate = UserDefaults.standard.object(forKey: "cache_date_\(groupId)") as? Date,
            Date().timeIntervalSince(cacheDate) < 300 { // Кэш валиден 5 минут
-            
             do {
                 let decoder = JSONDecoder()
-                decoder.keyDecodingStrategy = .convertFromSnakeCase
-                let scheduleItems = try decoder.decode([ScheduleItem].self, from: cachedData)
+                let normalized = normalizeScheduleJSONKeys(cachedData)
+                let root = try decoder.decode(APIResponse<[ScheduleItem]>.self, from: normalized)
+                guard root.success else {
+                    print("API error (cached group schedule): \(root.message ?? root.error ?? "Unknown error")")
+                    return
+                }
+                let scheduleItems = root.data
                 let tasks = processScheduleData(scheduleItems: scheduleItems)
-                
+
                 // Сохраняем в кэш с новым ID группы
                 CacheManager.save(data: cachedData, filename: "schedule_group_\(groupId).json")
                 UserDefaults.standard.set(Date(), forKey: "cache_date_\(groupId)")
-                
+
                 // Планируем новые уведомления
                 tasks.forEach { task in
                     NotificationManager.shared.scheduleLessonNotification(for: task)
                 }
-                
+
                 DispatchQueue.main.async {
                     apiConnection = true
                     completion(tasks)
@@ -1433,42 +1521,47 @@ private extension ContentView {
                 print("Ошибка декодирования кэша: \(error)")
             }
         }
-        
+
         // Если кэш отсутствует или устарел - загружаем с API
-        guard let url = URL(string: "https://api.mindenit.org/schedule/groups/\(groupId)") else {
+        guard let url = URL(string: "https://sh.mindenit.org/api/groups/\(groupId)/schedule") else {
             print("Неверный URL")
             apiConnection = false
             return
         }
-        
+
         let task = URLSession.shared.dataTask(with: url) { data, response, error in
             if let error = error {
                 print("Ошибка загрузки: \(error)")
                 apiConnection = false
                 return
             }
-            
+
             guard let data = data else {
                 print("Нет данных")
                 return
             }
-            
+
             do {
                 let decoder = JSONDecoder()
-                decoder.keyDecodingStrategy = .convertFromSnakeCase
-                let scheduleItems = try decoder.decode([ScheduleItem].self, from: data)
-                
+                let normalized = normalizeScheduleJSONKeys(data)
+                let root = try decoder.decode(APIResponse<[ScheduleItem]>.self, from: normalized)
+                guard root.success else {
+                    print("API error (group schedule): \(root.message ?? root.error ?? "Unknown error")")
+                    return
+                }
+                let scheduleItems = root.data
+
                 // Сохраняем в кэш с новым ID группы
                 CacheManager.save(data: data, filename: "schedule_group_\(groupId).json")
                 UserDefaults.standard.set(Date(), forKey: "cache_date_\(groupId)")
-                
+
                 let tasks = processScheduleData(scheduleItems: scheduleItems)
-                
+
                 // Планируем новые уведомления
                 tasks.forEach { task in
                     NotificationManager.shared.scheduleLessonNotification(for: task)
                 }
-                
+
                 DispatchQueue.main.async {
                     apiConnection = true
                     completion(tasks)
@@ -1479,17 +1572,21 @@ private extension ContentView {
         }
         task.resume()
     }
-    
+
     func fetchTeacherScheduleWithCache(forTeacherId teacherId: Int, completion: @escaping ([Task]) -> Void) {
         // Проверяем кэш
         if let cachedData = CacheManager.load(filename: "schedule_teacher_\(teacherId).json"),
            let cacheDate = UserDefaults.standard.object(forKey: "cache_date_teacher_\(teacherId)") as? Date,
            Date().timeIntervalSince(cacheDate) < 300 {
-            
             do {
                 let decoder = JSONDecoder()
-                decoder.keyDecodingStrategy = .convertFromSnakeCase
-                let scheduleItems = try decoder.decode([TeacherAPI].self, from: cachedData)
+                let normalized = normalizeScheduleJSONKeys(cachedData)
+                let root = try decoder.decode(APIResponse<[TeacherAPI]>.self, from: normalized)
+                guard root.success else {
+                    print("API error (cached teacher schedule): \(root.message ?? root.error ?? "Unknown error")")
+                    return
+                }
+                let scheduleItems = root.data
                 let tasks = processScheduleTeacherData(scheduleItems: scheduleItems)
                 completion(tasks)
                 return
@@ -1497,34 +1594,39 @@ private extension ContentView {
                 print("Ошибка декодирования кэша преподавателя: \(error)")
             }
         }
-        
-        guard let url = URL(string: "https://api.mindenit.org/schedule/teachers/\(teacherId)") else {
+
+        guard let url = URL(string: "https://sh.mindenit.org/api/teachers/\(teacherId)/schedule") else {
             print("Неверный URL")
             apiConnection = false
             return
         }
-        
+
         let task = URLSession.shared.dataTask(with: url) { data, response, error in
             if let error = error {
                 print("Ошибка загрузки: \(error)")
                 apiConnection = false
                 return
             }
-            
+
             guard let data = data else {
                 print("Нет данных")
                 return
             }
-            
+
             do {
                 let decoder = JSONDecoder()
-                decoder.keyDecodingStrategy = .convertFromSnakeCase
-                let scheduleItems = try decoder.decode([TeacherAPI].self, from: data)
-                
+                let normalized = normalizeScheduleJSONKeys(data)
+                let root = try decoder.decode(APIResponse<[TeacherAPI]>.self, from: normalized)
+                guard root.success else {
+                    print("API error (teacher schedule): \(root.message ?? root.error ?? "Unknown error")")
+                    return
+                }
+                let scheduleItems = root.data
+
                 // Сохраняем в кэш
                 CacheManager.save(data: data, filename: "schedule_teacher_\(teacherId).json")
                 UserDefaults.standard.set(Date(), forKey: "cache_date_teacher_\(teacherId)")
-                
+
                 let tasks = processScheduleTeacherData(scheduleItems: scheduleItems)
                 completion(tasks)
             } catch {
