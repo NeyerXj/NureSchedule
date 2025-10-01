@@ -153,10 +153,10 @@ struct SettingsSwiftUIView: View {
     var body: some View {
         NavigationStack {
             ZStack{
-                VStack {
-                    VStack(alignment: .leading, spacing: 10) {
+                VStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 8) {
                         Text("Налаштування")
-                            .font(.custom("Inter", size: 36).weight(.bold))
+                            .font(.custom("Inter", size: 34).weight(.bold))
                             .foregroundColor(.white)
                         
                         // Раздел "Режим викладача" и прочие настройки
@@ -237,20 +237,21 @@ struct SettingsSwiftUIView: View {
                             .toggleStyle(CustomToggleStyle())
                             
                         }
-                        .padding()
+                        .padding(8)
                         .background(
-                            RoundedRectangle(cornerRadius: 20)
+                            RoundedRectangle(cornerRadius: 16)
                                 .fill(Color.black.opacity(0.2))
                         )
-                        .padding()
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                         
                         // Секция уведомлений
                         
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 8) {
                             Text("Сповіщення")
-                                .font(.custom("Inter", size: 20).weight(.bold))
+                                .font(.custom("Inter", size: 18).weight(.bold))
                                 .foregroundColor(.white)
-                                .padding(.top).offset(y:-10)
+                                .padding(.top, 2)
                             
 //                            Toggle(isOn: $isNotificationsEnabled) {
 //                                VStack(alignment: .leading) {
@@ -279,12 +280,68 @@ struct SettingsSwiftUIView: View {
                             }
                             .toggleStyle(CustomToggleStyle())
                         }
-                        .padding()
+                        .padding(8)
                         .background(
-                            RoundedRectangle(cornerRadius: 20)
+                            RoundedRectangle(cornerRadius: 16)
                                 .fill(Color.black.opacity(0.2))
                         )
-                        .padding()
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        
+                        // Секция календаря (компактна)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Календар")
+                                .font(.custom("Inter", size: 16).weight(.semibold))
+                                .foregroundColor(.white)
+                                .padding(.top, 6)
+                            Button(action: {
+                                NotificationCenter.default.post(name: .exportScheduleToCalendar, object: nil)
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "calendar.badge.plus")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.white)
+                                    Text("Експортувати у Календар")
+                                        .font(.custom("Inter", size: 14).weight(.semibold))
+                                        .foregroundColor(.white)
+                                }
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 10)
+                                .frame(maxWidth: .infinity, minHeight: 32)
+                                .background(Color.blue.opacity(0.5))
+                                .cornerRadius(10)
+                            }
+                            Button(action: {
+                                NotificationCenter.default.post(name: .clearCalendarExports, object: nil)
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 13, weight: .regular))
+                                        .foregroundColor(.white)
+                                    Text("Видалити події календаря")
+                                        .font(.custom("Inter", size: 13).weight(.medium))
+                                        .foregroundColor(.white)
+                                }
+                                .padding(.vertical, 6)
+                                .padding(.horizontal, 10)
+                                .frame(maxWidth: .infinity, minHeight: 28)
+                                .background(Color.red.opacity(0.45))
+                                .cornerRadius(8)
+                            }
+                            Text("Повторний експорт замінює події, додані додатком.")
+                                .font(.custom("Inter", size: 11))
+                                .foregroundColor(.white.opacity(0.6))
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color.black.opacity(0.16))
+                        )
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                         
                         // Новые кнопки: переход на очистку кеша и связь с поддержкой
                         
@@ -341,7 +398,7 @@ struct SettingsSwiftUIView: View {
                     Spacer()
                     
                     // Кнопка "Закрити"
-                    VStack(spacing: 10) {
+                    VStack(spacing: 8) {
                         
                         // 🔹 Кнопка связи с поддержкой
                         Button(action: {
@@ -355,7 +412,7 @@ struct SettingsSwiftUIView: View {
                                 Text("Зв'язатися з підтримкою")
                                     .font(.custom("Inter", size: 16).weight(.medium))
                             }
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 8)
                             .frame(maxWidth: .infinity)
                             .background(
                                 LinearGradient(
@@ -381,7 +438,7 @@ struct SettingsSwiftUIView: View {
                                 Text("Очистити кеш")
                                     .font(.custom("Inter", size: 16).weight(.medium))
                             }
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 8)
                             .frame(maxWidth: .infinity)
                             .background(
                                 LinearGradient(
@@ -405,7 +462,7 @@ struct SettingsSwiftUIView: View {
                                 Text("Про додаток")
                                     .font(.custom("Inter", size: 16).weight(.medium))
                             }
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 8)
                             .frame(maxWidth: .infinity)
                             .background(
                                 LinearGradient(
@@ -428,7 +485,7 @@ struct SettingsSwiftUIView: View {
                                 Text("Закрити")
                                     .font(.custom("Inter", size: 16).weight(.medium))
                             }
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 8)
                             .frame(maxWidth: .infinity)
                             .background(
                                 LinearGradient(
@@ -443,7 +500,7 @@ struct SettingsSwiftUIView: View {
                         }
 
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 16)
                 
                 }
                 if showClearCahceView{
@@ -476,7 +533,7 @@ struct SettingsSwiftUIView: View {
                             .padding(.top, 20)
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("NureSchedule v1.2")
+                            Text("NureSchedule v1.3")
                                 .font(.custom("Inter", size: 18).weight(.semibold))
                                 .foregroundColor(.white)
                             
@@ -488,7 +545,7 @@ struct SettingsSwiftUIView: View {
                                 .background(Color.white.opacity(0.3))
                                 .padding(.vertical, 8)
                             
-                            Text("Це неофіційний додаток для перегляду розкладу ХНУРЕ. Додаток використовує відкриті API університету(та Mindenit) для отримання даних розкладу.")
+                            Text("Це неофіційний додаток для перегляду розкладу ХНУРЕ. Додаток використовує відкриті API Mindenit для отримання даних розкладу.")
                                 .font(.custom("Inter", size: 16))
                                 .foregroundColor(.white.opacity(0.8))
                                 .multilineTextAlignment(.leading)
@@ -834,4 +891,6 @@ struct CacheSettingsView: View {
 
 extension Notification.Name {
     static let isTeacherModeChanged = Notification.Name("isTeacherModeChanged")
+    static let exportScheduleToCalendar = Notification.Name("exportScheduleToCalendar")
+    static let clearCalendarExports = Notification.Name("clearCalendarExports")
 }

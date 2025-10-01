@@ -21,5 +21,7 @@
 		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Додаток потребує доступ до Календаря для експорту занять.</string>
 </dict>
 </plist>

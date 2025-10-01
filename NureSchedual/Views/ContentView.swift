@@ -646,6 +646,8 @@ struct ContentView: View {
             }
             .onDisappear {
                 NotificationCenter.default.removeObserver(self, name: .isTeacherModeChanged, object: nil)
+                NotificationCenter.default.removeObserver(self, name: .exportScheduleToCalendar, object: nil)
+                NotificationCenter.default.removeObserver(self, name: .clearCalendarExports, object: nil)
             }.navigationBarBackButtonHidden(true)
             .overlay {
                 if isShowingOnboarding {
@@ -661,6 +663,13 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowFeatureTour"))) { _ in
                 isShowingFeatureTour = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .exportScheduleToCalendar)) { _ in
+                let context = isTeacherMode ? selectedTeacher : selectedGroup
+                CalendarExportManager.shared.export(tasks: tasks, contextTitle: context)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .clearCalendarExports)) { _ in
+                CalendarExportManager.shared.clearAllExportedData()
             }
         }.onChange(of: tasks) { _ in
             updateStatistics()

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import StoreKit
 import BackgroundTasks
 import UserNotifications
 
@@ -194,6 +195,7 @@ extension Notification.Name {
 @main
 struct NureSchedualApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @Environment(\.scenePhase) private var scenePhase
     
     // Состояние для отображения индикатора загрузки
     @State private var showLoading = true
@@ -237,6 +239,28 @@ struct NureSchedualApp: App {
             }
             .onAppear {
             }
+        }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .active {
+                handleAppActivationForReviewPrompt()
+            }
+        }
+    }
+
+    private func handleAppActivationForReviewPrompt() {
+        let launchesKey = "app_launch_count"
+        let promptInterval = 5 // каждые N запусков
+
+        let current = UserDefaults.standard.integer(forKey: launchesKey)
+        let next = current + 1
+        UserDefaults.standard.set(next, forKey: launchesKey)
+
+        guard next % promptInterval == 0 else { return }
+
+        // Запрос оценки, если доступна активная сцена окна
+        if let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+            SKStoreReviewController.requestReview(in: scene)
         }
     }
 }
