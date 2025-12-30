@@ -3,6 +3,29 @@ import AVFoundation
 import Network
 import UserNotifications
 
+// MARK: - iOS 18-only SwiftUI transitions (safe wrappers)
+extension View {
+    /// Applies `navigationTransition(.zoom(...))` on iOS 18+, otherwise does nothing.
+    @ViewBuilder
+    func navigationZoomTransitionIfAvailable(sourceID: String, in namespace: Namespace.ID) -> some View {
+        if #available(iOS 18.0, *) {
+            self.navigationTransition(.zoom(sourceID: sourceID, in: namespace))
+        } else {
+            self
+        }
+    }
+    
+    /// Applies `matchedTransitionSource(...)` on iOS 18+, otherwise does nothing.
+    @ViewBuilder
+    func matchedTransitionSourceIfAvailable(id: String, in namespace: Namespace.ID) -> some View {
+        if #available(iOS 18.0, *) {
+            self.matchedTransitionSource(id: id, in: namespace)
+        } else {
+            self
+        }
+    }
+}
+
 struct APIResponse<T: Decodable>: Decodable {
     let success: Bool
     let data: T
@@ -473,7 +496,7 @@ struct ContentView: View {
                                 isTeacherMode: $isTeacherMode,
                                 selectedTeacher: $selectedTeacher
                             )
-                            .navigationTransition(.zoom(sourceID: "scheduleIcon", in: namespaceForSett))
+                            .navigationZoomTransitionIfAvailable(sourceID: "scheduleIcon", in: namespaceForSett)
                         } label: {
                             VStack {
                                 Image(systemName: "calendar")
@@ -485,7 +508,7 @@ struct ContentView: View {
                                     .clipShape(Circle())
                                     .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
                             }
-                            .matchedTransitionSource(id: "scheduleIcon", in: namespaceForSett)
+                            .matchedTransitionSourceIfAvailable(id: "scheduleIcon", in: namespaceForSett)
                         }
                         .padding(.leading, 0)
                         .accessibilityLabel("Розклад")
@@ -512,7 +535,7 @@ struct ContentView: View {
                         NavigationLink {
                             ZStack {
                                 SettingsSwiftUIView()
-                                    .navigationTransition(.zoom(sourceID: "icon", in: namespaceForSett))
+                                    .navigationZoomTransitionIfAvailable(sourceID: "icon", in: namespaceForSett)
                             }
                         } label: {
                             VStack {
@@ -525,7 +548,7 @@ struct ContentView: View {
                                     .clipShape(Circle())
                                     .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
                             }
-                            .matchedTransitionSource(id: "icon", in: namespaceForSett)
+                            .matchedTransitionSourceIfAvailable(id: "icon", in: namespaceForSett)
                         }
                         .padding(.leading, 5)
                         .accessibilityLabel("Настройки")
@@ -1107,7 +1130,7 @@ struct ContentView: View {
             if !isWeekVievMode {
                 ForEach(tasks.indices.filter { isSameDay(tasks[$0].date, currentDate) }, id: \.self) { index in
                     NavigationLink(destination: DetailView(task: tasks[index], namespace: detailNamespace)
-                        .navigationTransition(.zoom(sourceID: "detail", in: detailNamespace))) {
+                        .navigationZoomTransitionIfAvailable(sourceID: "detail", in: detailNamespace)) {
                         TaskItem(task: $tasks[index], namespace: detailNamespace)
                             .background(alignment: .leading) {
                                 let filteredTasks = tasks.filter { isSameDay($0.date, currentDate) }

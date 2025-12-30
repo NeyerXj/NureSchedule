@@ -210,10 +210,16 @@ struct FullScreenWeeklyScheduleView: View {
                 VStack(spacing: 4) {
                     ScrollView {
                         ForEach(dayTasks) { task in
-                            NavigationLink(destination: DetailView(task: task, namespace: animationDetail)
-                                .navigationTransition(.zoom(sourceID: "detail", in: animationDetail))) {
+                            if #available(iOS 18.0, *) {
+                                NavigationLink(destination: DetailView(task: task, namespace: animationDetail)
+                                    .navigationTransition(.zoom(sourceID: "detail", in: animationDetail))) {
+                                        TaskItemTable(task: task)
+                                    }
+                            } else {
+                                NavigationLink(destination: DetailView(task: task, namespace: animationDetail)) {
                                     TaskItemTable(task: task)
                                 }
+                            }
                         }
                     }
                     .frame(maxHeight: .infinity)
